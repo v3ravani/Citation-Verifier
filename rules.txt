@@ -1,0 +1,140 @@
+CITATION VERIFIER - DEVELOPMENT RULES
+====================================
+
+These rules define strict engineering, design, and integrity constraints for the project.
+
+--------------------------------------------------
+1. NO FAKE DATA
+--------------------------------------------------
+- Never generate or display fake references
+- Never fabricate authors, DOIs, or titles
+- Never create dummy similarity scores
+- Never use placeholder graphs in production
+- If data is unavailable → show empty or “unavailable”
+
+--------------------------------------------------
+2. REAL VERIFICATION ONLY
+--------------------------------------------------
+- All citations must be verified using:
+  - Crossref API
+  - Semantic Scholar API
+- If API fails → show error state, do not guess
+
+--------------------------------------------------
+3. NO AI APIs
+--------------------------------------------------
+- Do NOT use:
+  - OpenAI
+  - Gemini
+  - Claude
+- Only local NLP models allowed
+
+--------------------------------------------------
+4. LOCAL STORAGE ONLY
+--------------------------------------------------
+- No database (SQL/NoSQL)
+- Use:
+  - JSON files
+  - TXT reports
+  - local cache
+- All data must persist via filesystem
+
+--------------------------------------------------
+5. TRANSPARENCY
+--------------------------------------------------
+- Every score must be explainable
+- Show:
+  - similarity value
+  - match confidence
+  - source of data
+- No “black box” outputs
+
+--------------------------------------------------
+6. ERROR HANDLING
+--------------------------------------------------
+- Never crash on:
+  - bad PDF
+  - missing references
+  - API failure
+- Always return readable message
+
+--------------------------------------------------
+7. UI RULES
+--------------------------------------------------
+- White background only
+- No dark mode
+- No gradients / neon / glassmorphism
+- No “AI chatbot” style UI
+- Clean academic look
+
+--------------------------------------------------
+8. PERFORMANCE
+--------------------------------------------------
+- Load NLP model once
+- Use batching for embeddings
+- Cache API responses
+- Avoid repeated processing
+
+--------------------------------------------------
+9. SECURITY
+--------------------------------------------------
+- Accept only PDF uploads
+- Validate file size and type
+- Prevent path traversal
+- No code execution from input
+
+--------------------------------------------------
+10. FILE STRUCTURE
+--------------------------------------------------
+uploads/
+data/
+cache/
+results/
+logs/
+
+--------------------------------------------------
+11. LOGGING
+--------------------------------------------------
+- Log:
+  - uploads
+  - API calls
+  - errors
+- Do NOT log full paper content
+
+--------------------------------------------------
+12. LIMITATIONS DISCLOSURE
+--------------------------------------------------
+- Always show:
+  - similarity ≠ correctness
+  - heuristic flags ≠ proof
+  - metadata may be incomplete
+
+--------------------------------------------------
+13. CODING STYLE
+--------------------------------------------------
+- Modular code
+- Clear function separation
+- No unnecessary abstractions
+- Readable variable names
+
+--------------------------------------------------
+14. TESTING
+--------------------------------------------------
+- Test with real research papers
+- No synthetic-only tests
+- Cover:
+  - parsing
+  - API
+  - scoring
+
+--------------------------------------------------
+15. FINAL RULE
+--------------------------------------------------
+If a feature cannot be implemented correctly,
+DO NOT fake it.
+Instead:
+- disable it
+- or show “not available”
+
+====================================
+END OF RULES

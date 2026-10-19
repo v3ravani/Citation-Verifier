@@ -1,0 +1,136 @@
+CITATION VERIFIER - ARCHITECTURE
+=====================================
+
+1. OVERVIEW
+-----------
+The system is a modular web application designed to verify citations in academic papers.
+
+It consists of:
+- React Frontend
+- FastAPI Backend
+- NLP Engine (local)
+- External Metadata APIs
+- Local File Storage
+- FAISS Vector Search
+
+--------------------------------------------------
+
+2. HIGH LEVEL FLOW
+------------------
+User Uploads PDF
+        ↓
+Backend receives file
+        ↓
+PDF Text Extraction (PyMuPDF)
+        ↓
+Reference + Citation Parsing
+        ↓
+Metadata Verification (Crossref + Semantic Scholar)
+        ↓
+NLP Embedding Generation (Sentence-BERT)
+        ↓
+FAISS Similarity Search
+        ↓
+Scoring + Classification
+        ↓
+Store Results (JSON/TXT)
+        ↓
+Send Response to Frontend
+
+--------------------------------------------------
+
+3. COMPONENTS
+
+3.1 FRONTEND (React)
+- Upload interface
+- Analysis dashboard
+- Reference table
+- Citation detail view
+- Graph visualization
+- Export buttons
+
+3.2 BACKEND (FastAPI)
+- Handles API requests
+- Coordinates processing pipeline
+- Manages caching and storage
+
+3.3 PDF MODULE
+- Extracts raw text
+- Detects reference section
+
+3.4 CITATION MODULE
+- Parses bibliography
+- Extracts in-text citations
+- Maps citations to references
+
+3.5 METADATA MODULE
+- Calls Crossref API
+- Calls Semantic Scholar API
+- Matches metadata using fuzzy logic
+
+3.6 NLP MODULE
+- Loads Sentence-BERT model
+- Generates embeddings
+- Computes similarity
+
+3.7 VECTOR SEARCH (FAISS)
+- Stores reference embeddings
+- Finds closest matches for citation context
+
+3.8 SCORING MODULE
+- Computes verification score
+- Computes relevance score
+- Applies heuristic rules
+
+3.9 STORAGE (LOCAL)
+- uploads/ → PDFs
+- data/ → extracted text
+- cache/ → API responses + embeddings
+- results/ → final JSON + TXT
+
+--------------------------------------------------
+
+4. DATA FLOW DETAIL
+
+PDF → Text → References → Metadata → Embeddings → Similarity → Scores → Output
+
+Each stage is independent and modular.
+
+--------------------------------------------------
+
+5. CACHING
+
+- API responses cached locally (JSON)
+- Embeddings cached for reuse
+- Avoid repeated API calls
+
+--------------------------------------------------
+
+6. NO DATABASE DESIGN
+
+- Uses filesystem instead of DB
+- Faster to implement
+- Easy to debug
+- Suitable for single-user/local usage
+
+--------------------------------------------------
+
+7. ERROR FLOW
+
+If any step fails:
+- Log error
+- Continue processing other parts
+- Return partial results
+
+--------------------------------------------------
+
+8. SCALABILITY NOTES
+
+- Can later add DB
+- Can add async workers
+- Can add OCR
+- Can scale API calls
+
+--------------------------------------------------
+
+END OF ARCHITECTURE

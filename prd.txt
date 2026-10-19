@@ -1,0 +1,1890 @@
+PROJECT PRD / BUILD PROMPT
+==========================
+
+PROJECT NAME
+Citation Verifier
+
+PROJECT TYPE
+Research integrity / academic verification platform
+
+PRIMARY GOAL
+Build a production-style web application that accepts a research paper PDF and verifies the citations used inside the paper using real academic metadata sources and local NLP models.
+
+The system must not behave like a generic “AI citation checker”. It must be deterministic where possible, transparent in how each result is produced, and must clearly separate:
+1. Reference existence verification
+2. Metadata correctness
+3. Citation-context relevance
+4. Citation quality
+5. Potential overclaiming / unsupported citation usage
+
+This is intended to be a serious, M.Tech-level engineering project, not a hackathon mockup.
+
+The application must use:
+- Python
+- FastAPI
+- React
+- JavaScript
+- Local NLP models
+- Sentence-BERT or equivalent local sentence embedding model
+- FAISS or equivalent local vector search
+- PyMuPDF for PDF text extraction
+- Crossref API
+- Semantic Scholar API
+- Local file storage only
+- JSON / TXT / local cache files
+- No database
+- No OpenAI API
+- No Gemini API
+- No Claude API
+- No paid AI API
+- No mock verification data
+- No fake metrics
+- No randomly generated “confidence scores”
+
+The frontend must use:
+- White background
+- Light theme only
+- No dark mode
+- No gradient-heavy “AI” style
+- No purple neon, blue-purple gradient, glowing cards, glassmorphism, oversized rounded cards, floating blobs, chatbot-like UI, sparkle icons, or generic AI-generated SaaS visual language
+- The design should look like a serious academic / research productivity tool
+- Visual inspiration should be closer to Zotero, Semantic Scholar, Google Scholar, Overleaf, academic dashboards, or modern research tooling
+
+======================================================================
+1. PROBLEM STATEMENT
+======================================================================
+
+Research papers often contain citation problems such as:
+- References that do not exist
+- Incorrect title, author, DOI, venue, year, or publication metadata
+- In-text citations that point to the wrong reference
+- References that exist but are irrelevant to the claim they are attached to
+- Citations that weakly support a statement
+- Citations used to exaggerate or overstate findings
+- Excessive reliance on a small subset of references
+- Old references used when newer research exists
+- Duplicate references
+- Missing DOI or incomplete metadata
+- AI-hallucinated references created by generative tools
+
+The system should help a student, researcher, reviewer, or faculty member inspect citation reliability in a transparent way.
+
+The system is NOT a medical or legal decision-making system.
+It is an academic research support tool.
+
+======================================================================
+2. CORE PRODUCT PRINCIPLES
+======================================================================
+
+The system must follow these principles:
+
+1. REAL DATA ONLY
+Every citation verification must be based on real extracted PDF text and real external academic metadata.
+
+Never populate the UI with placeholder papers, made-up authors, fake DOIs, artificial citation counts, or dummy relevance values.
+
+2. TRACEABILITY
+For every result, the user must be able to understand:
+- what was extracted
+- what API result was matched
+- what similarity score was computed
+- how the final status was derived
+
+3. LOCAL NLP
+All semantic analysis should be performed locally using a downloaded transformer / sentence embedding model.
+
+4. NO GENERATIVE AI DEPENDENCY
+Do not depend on an external LLM.
+
+5. NO DATABASE
+Use local filesystem storage and in-memory runtime objects.
+
+6. FAIL GRACEFULLY
+If Semantic Scholar or Crossref does not return a result, say:
+- "No verified match found"
+instead of inventing a result.
+
+7. DISTINGUISH FACT FROM HEURISTIC
+For example:
+- “DOI matched Crossref” = verified fact
+- “Citation context relevance: 0.73 cosine similarity” = computed heuristic
+- “Potential overclaim” = heuristic flag, not a factual accusation
+
+8. ACADEMIC VISUAL STYLE
+The website must look trustworthy, restrained, readable, and deliberately designed.
+
+======================================================================
+3. TARGET USERS
+======================================================================
+
+Primary users:
+- M.Tech students
+- PhD scholars
+- Research assistants
+- Faculty
+- Reviewers
+- Students writing academic papers
+
+Secondary users:
+- Journal editors
+- Technical content writers
+- Students verifying AI-generated references
+
+======================================================================
+4. FIVE CORE USPs
+======================================================================
+
+USP 1: CONTEXT-AWARE CITATION VALIDATION
+
+The system should not stop at checking whether a cited paper exists.
+
+For each in-text citation:
+- extract the sentence containing the citation
+- optionally include one sentence before and after
+- identify the matching reference from the bibliography
+- retrieve metadata and abstract of that reference
+- embed the citation context
+- embed the cited paper abstract
+- compute semantic similarity
+
+The system should output:
+- Strongly supported
+- Moderately supported
+- Weakly related
+- Likely unrelated
+- Unable to evaluate
+
+Do not use arbitrary labels without showing the numerical similarity score.
+
+The thresholds must be configurable in the backend.
+
+Example starting thresholds:
+- >= 0.78: Strongly related
+- 0.62–0.779: Moderately related
+- 0.45–0.619: Weakly related
+- < 0.45: Likely unrelated
+
+These are heuristic starting values and must be clearly identified as such.
+
+USP 2: FAKE / HALLUCINATED REFERENCE DETECTION
+
+For each bibliography entry:
+- normalize title
+- extract author names if possible
+- extract publication year
+- extract DOI if present
+- search Crossref
+- search Semantic Scholar
+- compare returned title to extracted title using fuzzy matching
+- compare year
+- compare authors
+- compare DOI
+
+Classify reference existence into:
+- Verified exact match
+- Verified probable match
+- Metadata mismatch
+- No verified match found
+- API unavailable
+
+The application must never call an unverified reference “fake” with certainty.
+Use wording such as:
+- "No verified record found"
+- "Potentially hallucinated or malformed reference"
+
+USP 3: CITATION QUALITY SCORE
+
+Each citation/reference may receive a transparent quality score.
+
+The score must be based on actual measurable features such as:
+- metadata match quality
+- citation-context similarity
+- publication recency
+- citation count, only if a trusted API supplies it
+- DOI presence
+- author/year consistency
+
+The scoring system must be documented.
+
+Example scoring structure:
+- 35 points: metadata verification
+- 35 points: semantic relevance
+- 10 points: year match
+- 10 points: author match
+- 10 points: source metadata completeness
+
+Do NOT create fake citation counts or impact scores.
+
+Do NOT imply that citation count equals scientific truth.
+
+USP 4: CITATION NETWORK / RELATIONSHIP VISUALIZATION
+
+Create a visualization of:
+- current uploaded paper at the center
+- references as linked nodes
+- optional edges among cited papers when available
+
+At minimum:
+- one node = uploaded paper
+- one node per extracted verified reference
+- edge = paper cites reference
+
+Node state can represent:
+- verified
+- uncertain
+- metadata mismatch
+- unverified
+
+The visualization must be based on the actual processed paper.
+
+Do not generate decorative graph data.
+
+USP 5: POTENTIAL OVERCLAIM / CLAIM-STRENGTH MISMATCH DETECTION
+
+Without an LLM, implement this as a transparent heuristic.
+
+The system should inspect citation sentences for strong claim terms such as:
+- proves
+- always
+- completely
+- guarantees
+- establishes
+- demonstrates conclusively
+- significantly outperforms
+- dramatically improves
+- eliminates
+- universally
+- definitive
+
+Then compare:
+- citation-context semantic similarity
+- abstract similarity
+- lexical overlap with abstract
+- presence or absence of similar strong claim language in the abstract
+
+Flag as:
+- No concern detected
+- Review recommended
+- Potential overclaim
+
+This is only a heuristic and must be presented as such.
+
+Never state that an author is dishonest or that a citation is fraudulent.
+
+======================================================================
+5. TECH STACK
+======================================================================
+
+BACKEND
+- Python 3.11+
+- FastAPI
+- Uvicorn
+- Pydantic
+- Requests or HTTPX
+- PyMuPDF
+- sentence-transformers
+- scikit-learn where helpful
+- FAISS
+- rapidfuzz for fuzzy title matching
+- regex
+- pathlib
+- JSON
+- hashlib
+- logging
+
+NLP
+Recommended initial model:
+- sentence-transformers/all-MiniLM-L6-v2
+
+The model must run locally.
+
+Optional future models:
+- all-mpnet-base-v2
+- SPECTER / SciBERT-style scholarly embeddings
+
+Do not make the first implementation dependent on GPU.
+
+METADATA SOURCES
+Primary:
+- Crossref API
+- Semantic Scholar API
+
+Use actual HTTP requests.
+
+Respect rate limits.
+
+Cache API responses locally.
+
+FRONTEND
+- React
+- JavaScript
+- Vite
+- Fetch or Axios
+- CSS modules or plain CSS
+- D3.js or a lightweight React graph library for visualization
+- No UI framework unless necessary
+- Avoid generic template appearance
+
+STORAGE
+No SQL.
+No MongoDB.
+No Firebase.
+No Supabase.
+No cloud database.
+
+Use:
+- /data
+- /uploads
+- /cache
+- /results
+- /logs
+
+Example:
+backend/
+  data/
+  uploads/
+  cache/
+    crossref/
+    semantic_scholar/
+    embeddings/
+  results/
+  logs/
+
+Data formats:
+- JSON for structured analysis
+- TXT for extracted raw text
+- optional .npy / .pkl / FAISS index for embeddings
+
+======================================================================
+6. HIGH-LEVEL ARCHITECTURE
+======================================================================
+
+React Frontend
+      |
+      | HTTP
+      v
+FastAPI Backend
+      |
+      +-- PDF Extraction Layer
+      |
+      +-- Citation Parsing Layer
+      |
+      +-- Metadata Verification Layer
+      |       +-- Crossref
+      |       +-- Semantic Scholar
+      |
+      +-- NLP Embedding Layer
+      |
+      +-- FAISS Similarity Layer
+      |
+      +-- Scoring / Classification Engine
+      |
+      +-- Local Cache + JSON Results
+      |
+      +-- API response to frontend
+
+======================================================================
+7. END-TO-END WORKFLOW
+======================================================================
+
+STEP 1: Upload
+
+User uploads:
+- one PDF
+
+Validation:
+- must be PDF
+- reject unsupported file type
+- configurable max file size
+- reject zero-byte files
+- sanitize filename
+- compute SHA-256 hash
+
+If same paper hash has already been processed:
+- allow reusing cached result
+- allow manual re-run
+
+STEP 2: PDF Text Extraction
+
+Use PyMuPDF.
+
+Extract:
+- full text
+- page-level text
+- page numbers
+- probable bibliography section
+- probable in-text citations
+
+Save:
+uploads/<hash>.pdf
+data/<hash>_text.txt
+
+Do not overwrite another file silently.
+
+STEP 3: Detect Reference Section
+
+Try headings:
+- References
+- Bibliography
+- Works Cited
+- Literature Cited
+
+Use case-insensitive detection.
+
+If not found:
+- try bottom portion of document heuristics
+- show warning in UI
+
+STEP 4: Parse Bibliography
+
+Support initial formats:
+- IEEE numeric references
+- APA-like references
+- numbered plain references
+
+Extract per reference:
+- local reference id
+- raw reference text
+- title
+- authors
+- year
+- venue
+- volume
+- issue
+- pages
+- DOI
+- URL if present
+
+Parsing quality may vary.
+Always preserve raw reference text.
+
+STEP 5: Parse In-Text Citations
+
+Support:
+- [1]
+- [2, 4]
+- [3–5]
+- (Smith, 2022)
+- Smith et al. (2022)
+
+Each occurrence should store:
+- citation marker
+- page number if available
+- sentence
+- previous sentence
+- next sentence
+- mapped bibliography reference ids
+- extraction confidence
+
+STEP 6: Verify References
+
+For each reference:
+
+A. If DOI exists:
+- query Crossref DOI
+- query Semantic Scholar DOI if supported
+- compare metadata
+
+B. If no DOI:
+- search title
+- normalize punctuation/case
+- compare title similarity
+- compare first author
+- compare year
+
+Store:
+- API source
+- matched paper title
+- matched authors
+- year
+- DOI
+- venue
+- URL
+- abstract when available
+- citation count when available
+- raw API confidence/score if supplied
+- local fuzzy-match score
+
+STEP 7: Build Match Confidence
+
+Example:
+title similarity: 50%
+author match: 20%
+year match: 15%
+DOI exact match: 15%
+
+If DOI exact matches, verification should be considered very strong.
+
+Do not rely only on fuzzy title similarity.
+
+STEP 8: Semantic Citation Validation
+
+For each in-text citation with verified metadata:
+
+Construct citation context:
+previous sentence + target sentence + next sentence
+
+Retrieve:
+- abstract
+- title
+- optional external metadata
+
+Create embedding:
+- context
+- abstract
+- optionally title + abstract
+
+Normalize vectors.
+
+Use cosine similarity.
+
+FAISS can:
+- index all reference abstract vectors
+- identify which references are semantically nearest to a citation context
+- compare expected reference to nearest candidates
+
+This adds an advanced feature:
+"Was the cited paper actually the most semantically relevant reference among the bibliography?"
+
+Store:
+- expected citation similarity
+- rank among all reference vectors
+- top 3 similar references
+- classification
+
+STEP 9: Quality Scoring
+
+Produce:
+- Reference Verification Score
+- Context Relevance Score
+- Overall Citation Confidence Score
+
+Do not combine them in a way that hides their components.
+
+The UI must show the breakdown.
+
+STEP 10: Overclaim Heuristic
+
+Detect strong assertion words in citation sentence.
+
+Compare:
+- strength indicator
+- abstract wording
+- similarity score
+
+Flag only when appropriate.
+
+STEP 11: Summary
+
+Show real totals:
+- Total references detected
+- Verified exact
+- Verified probable
+- Metadata mismatch
+- Unverified
+- Total in-text citation occurrences
+- Strong relevance
+- Moderate relevance
+- Weak relevance
+- Potentially unrelated
+- Potential overclaim flags
+
+STEP 12: Export
+
+Allow:
+- Download analysis JSON
+- Download human-readable TXT report
+
+Optional:
+- CSV export
+
+======================================================================
+8. BACKEND MODULE DESIGN
+======================================================================
+
+Recommended structure:
+
+backend/
+  app/
+    main.py
+
+    api/
+      routes_upload.py
+      routes_analysis.py
+      routes_results.py
+
+    core/
+      config.py
+      logging_config.py
+      paths.py
+
+    pdf/
+      extractor.py
+      section_detector.py
+
+    citations/
+      reference_parser.py
+      inline_parser.py
+      mapper.py
+      normalizer.py
+
+    metadata/
+      crossref.py
+      semantic_scholar.py
+      verifier.py
+      cache.py
+
+    nlp/
+      model_loader.py
+      embeddings.py
+      similarity.py
+      overclaim.py
+
+    search/
+      faiss_index.py
+
+    scoring/
+      citation_score.py
+      metadata_score.py
+
+    models/
+      schemas.py
+
+    services/
+      pipeline.py
+      result_manager.py
+
+  uploads/
+  data/
+  cache/
+  results/
+  logs/
+  requirements.txt
+
+FRONTEND:
+
+frontend/
+  src/
+    components/
+      Header.jsx
+      UploadPanel.jsx
+      ProcessingStatus.jsx
+      SummaryCards.jsx
+      ReferenceTable.jsx
+      ReferenceDetails.jsx
+      CitationContext.jsx
+      CitationGraph.jsx
+      ScoreBreakdown.jsx
+      WarningBadge.jsx
+      EmptyState.jsx
+
+    pages/
+      Home.jsx
+      Analysis.jsx
+
+    api/
+      client.js
+
+    utils/
+      format.js
+
+    styles/
+      global.css
+
+  package.json
+
+======================================================================
+9. FASTAPI ENDPOINTS
+======================================================================
+
+POST /api/upload
+
+Input:
+multipart/form-data PDF
+
+Output:
+{
+  "paper_id": "...",
+  "filename": "...",
+  "sha256": "...",
+  "status": "uploaded"
+}
+
+POST /api/analyze/{paper_id}
+
+Starts synchronous analysis initially.
+
+Return complete result for first version.
+
+Future enhancement:
+background job processing.
+
+GET /api/result/{paper_id}
+
+Returns previously stored JSON result.
+
+GET /api/report/{paper_id}/txt
+
+Returns human-readable TXT report.
+
+GET /api/report/{paper_id}/json
+
+Returns JSON analysis.
+
+GET /api/cache/status
+
+Optional debug/development endpoint.
+
+======================================================================
+10. RESULT JSON SCHEMA
+======================================================================
+
+Example structure:
+
+{
+  "paper": {
+    "id": "...",
+    "filename": "...",
+    "sha256": "...",
+    "pages": 12,
+    "title_guess": "..."
+  },
+
+  "summary": {
+    "references_detected": 35,
+    "verified_exact": 22,
+    "verified_probable": 7,
+    "metadata_mismatch": 3,
+    "unverified": 3,
+    "citation_occurrences": 61,
+    "strong_context_match": 31,
+    "moderate_context_match": 18,
+    "weak_context_match": 8,
+    "likely_unrelated": 4,
+    "overclaim_flags": 3
+  },
+
+  "references": [
+    {
+      "reference_id": 1,
+      "raw_text": "...",
+      "parsed": {
+        "title": "...",
+        "authors": [],
+        "year": 2023,
+        "doi": "..."
+      },
+      "verification": {
+        "status": "verified_exact",
+        "source": "crossref",
+        "title_similarity": 0.98,
+        "author_match": 1.0,
+        "year_match": true,
+        "doi_match": true
+      },
+      "external": {
+        "title": "...",
+        "authors": [],
+        "year": 2023,
+        "abstract": "...",
+        "citation_count": 123,
+        "url": "..."
+      },
+      "citation_occurrences": []
+    }
+  ]
+}
+
+======================================================================
+11. FRONTEND DESIGN SPECIFICATION
+======================================================================
+
+GENERAL STYLE
+
+The interface must:
+- use a white background
+- use subtle light gray sections
+- use black / dark gray text
+- use one restrained accent color
+- use consistent spacing
+- use thin borders
+- use small to medium border radius
+- look like research software, not an AI landing page
+
+Avoid:
+- dark mode
+- gradients
+- neon
+- purple
+- glowing UI
+- glass cards
+- large floating blobs
+- fake 3D
+- excessive shadows
+- extremely rounded pill UI
+- robot icons
+- sparkles
+- "Ask AI" language
+- animated typewriter text
+- chat window layouts
+
+TYPOGRAPHY
+
+Use:
+- Inter
+or
+- system UI
+
+Headings:
+clean, compact, strong hierarchy.
+
+Body:
+high readability.
+
+Do not use a futuristic font.
+
+HEADER
+
+Left:
+Citation Verifier logo / text
+
+Right:
+- About
+- Methodology
+- GitHub optional
+
+Keep it simple.
+
+HOME PAGE
+
+Top section:
+Title:
+"Verify citations beyond the bibliography."
+
+Subtitle:
+"Check whether references exist, whether metadata matches, and whether cited sources are semantically relevant to the claims they support."
+
+Do not write generic AI marketing copy.
+
+Primary upload panel:
+- drag and drop
+- "Choose PDF"
+- accepted format
+- max size
+- privacy note:
+  "Files are processed locally by the application. Academic metadata is queried from Crossref and Semantic Scholar."
+
+Below:
+Methodology in 4 short steps:
+1. Extract
+2. Verify
+3. Compare
+4. Review
+
+ANALYSIS PAGE
+
+Top bar:
+filename
+paper status
+analysis timestamp
+button:
+- Export TXT
+- Export JSON
+
+SUMMARY SECTION
+
+Show compact data cards:
+- References
+- Verified
+- Needs review
+- Unverified
+- Citation contexts
+- Potential overclaims
+
+No fake animated counters.
+
+Every number must come from result JSON.
+
+REFERENCE TABLE
+
+Columns:
+- #
+- Extracted reference
+- Verification
+- Metadata match
+- Context relevance
+- Score
+- Action
+
+Each row should be clickable.
+
+Statuses:
+Verified
+Probable match
+Metadata mismatch
+Unverified
+API unavailable
+
+Use restrained color coding.
+
+Do not depend only on color.
+Always include text.
+
+REFERENCE DETAIL DRAWER / PAGE
+
+Sections:
+1. Extracted Reference
+2. Verified Metadata
+3. Differences
+4. Citation Contexts
+5. Semantic Similarity
+6. Source Links
+7. Score Breakdown
+
+Differences should highlight:
+- title mismatch
+- author mismatch
+- year mismatch
+- DOI mismatch
+
+CITATION CONTEXT DISPLAY
+
+Show:
+previous sentence
+target citation sentence
+next sentence
+
+Visually emphasize the target sentence.
+
+Show:
+- similarity score
+- label
+- rank against bibliography
+- relevant matched paper
+
+CITATION NETWORK
+
+Minimal graph.
+
+Center:
+Uploaded paper.
+
+Around:
+verified references.
+
+Legend:
+- Verified
+- Probable
+- Needs review
+- Unverified
+
+Graph must be based only on actual references.
+
+METHODOLOGY PAGE
+
+Explain:
+- how matching works
+- how semantic similarity works
+- how scores are computed
+- limitations
+- API sources
+- model name
+- heuristic thresholds
+
+This is important for academic transparency.
+
+======================================================================
+12. LOCAL STORAGE DESIGN
+======================================================================
+
+Use local file storage.
+
+uploads/
+  <paper_hash>.pdf
+
+data/
+  <paper_hash>_text.txt
+  <paper_hash>_references.json
+  <paper_hash>_citations.json
+
+cache/
+  crossref/
+    <query_hash>.json
+
+  semantic_scholar/
+    <query_hash>.json
+
+  embeddings/
+    <paper_hash>.npy
+
+results/
+  <paper_hash>.json
+  <paper_hash>_report.txt
+
+logs/
+  app.log
+
+All file write operations should:
+- use UTF-8
+- create directories if missing
+- handle permission errors
+- avoid path traversal
+- use sanitized paths
+
+======================================================================
+13. CACHE STRATEGY
+======================================================================
+
+Avoid repeatedly hitting external APIs.
+
+For each API request:
+- normalize query
+- hash query
+- check cache file
+- if cached and valid, return cache
+- else call API
+- save raw response
+
+Include:
+- timestamp
+- source
+- query
+- HTTP status
+- response
+
+Configurable cache TTL:
+e.g. 30 days.
+
+======================================================================
+14. CROSSREF INTEGRATION
+======================================================================
+
+Use Crossref for:
+- DOI resolution
+- title
+- author
+- year
+- journal / venue
+- publisher
+- URL
+
+Search strategy:
+1. DOI exact
+2. bibliographic search
+3. title search
+
+Rate limit responsibly.
+
+Use:
+- descriptive user-agent
+- optional contact email configuration
+
+Handle:
+- 404
+- 429
+- 5xx
+- timeout
+- malformed response
+
+Never crash the full paper analysis because one reference failed.
+
+======================================================================
+15. SEMANTIC SCHOLAR INTEGRATION
+======================================================================
+
+Use Semantic Scholar for:
+- paper lookup
+- title
+- authors
+- year
+- abstract
+- citation count
+- external IDs
+- URL
+
+If abstract is unavailable:
+- fall back to title embedding
+- mark semantic confidence as reduced
+
+If API is unavailable:
+- continue with Crossref verification
+- show semantic analysis unavailable when abstract cannot be obtained
+
+======================================================================
+16. CITATION PARSING
+======================================================================
+
+The parser should be modular.
+
+Reference formats to prioritize:
+- IEEE
+- APA
+- basic numbered references
+
+Numeric citation examples:
+[1]
+[2,3]
+[2, 5, 8]
+[4–7]
+
+Expand ranges carefully.
+
+Author-year examples:
+(Smith, 2022)
+(Smith & Jones, 2021)
+(Smith et al., 2020)
+
+Do not falsely interpret normal bracketed numbers as citations if avoidable.
+
+Store extraction confidence.
+
+======================================================================
+17. PDF LIMITATIONS
+======================================================================
+
+First version:
+- text-based PDFs only
+- scanned/image-only PDFs should return:
+  "No machine-readable text detected."
+
+Do not silently use OCR.
+
+Optional future:
+OCR module.
+
+Handle:
+- multi-column text
+- page headers
+- page footers
+- broken line wraps
+
+Normalize hyphenation when appropriate.
+
+======================================================================
+18. NLP PIPELINE
+======================================================================
+
+Load local embedding model once at application startup.
+
+Do not reload model for every request.
+
+Pipeline:
+1. normalize text
+2. sentence split
+3. compose citation context
+4. encode contexts in batch
+5. encode abstracts in batch
+6. normalize embeddings
+7. build FAISS index
+8. compute search results
+
+Use batching for performance.
+
+Keep raw cosine similarity.
+
+Do not transform similarity to fake percentages unless clearly stated.
+
+Preferred display:
+"Semantic similarity: 0.74"
+
+Optional:
+"74/100 relevance index"
+only if explained as a normalized heuristic.
+
+======================================================================
+19. FAISS USAGE
+======================================================================
+
+For a paper with N verified references:
+
+- encode N reference texts
+- build IndexFlatIP after vector normalization
+- encode each citation context
+- retrieve top-k closest references
+
+For each citation:
+store:
+- cited reference rank
+- cited reference similarity
+- top 3 references
+- gap between top result and cited result
+
+Interesting heuristic:
+if cited reference ranks very low and another reference strongly outranks it, mark:
+"Review citation selection"
+
+Do not label as incorrect automatically.
+
+======================================================================
+20. OVERCLAIM HEURISTIC
+======================================================================
+
+Create a configurable keyword list.
+
+Strong claim examples:
+proves
+proven
+always
+never
+guarantees
+completely
+eliminates
+definitive
+universal
+significantly superior
+dramatically better
+conclusively demonstrates
+
+Moderate claim:
+suggests
+indicates
+may
+could
+associated
+observed
+supports
+consistent with
+
+Logic:
+- strong wording in claim
+- low or moderate semantic similarity
+- abstract does not contain similar strong evidence wording
+=> potential overclaim
+
+This feature must be labelled:
+"Heuristic review flag"
+
+Never:
+"False claim detected"
+
+======================================================================
+21. SCORING SYSTEM
+======================================================================
+
+Keep scores transparent.
+
+REFERENCE VERIFICATION SCORE / 100
+
+Example:
+DOI exact match: 30
+Title match: 35
+Author match: 20
+Year match: 15
+
+If DOI absent:
+redistribute weight across title/author/year.
+
+CONTEXT RELEVANCE SCORE
+Use cosine similarity separately.
+
+Do not hide raw value.
+
+OVERALL SCORE
+If required:
+- metadata: 55%
+- semantic relevance: 45%
+
+Overall score must not be used where no semantic information exists.
+
+If abstract missing:
+show:
+"Overall score unavailable"
+or
+"Metadata-only score"
+
+Do not pretend semantic verification occurred.
+
+======================================================================
+22. ERROR HANDLING
+======================================================================
+
+Every major failure should have a user-readable state.
+
+Examples:
+
+PDF invalid:
+"Please upload a valid PDF file."
+
+No text:
+"No machine-readable text could be extracted."
+
+No references:
+"No reference section was detected."
+
+API timeout:
+"Crossref temporarily unavailable."
+
+No match:
+"No verified academic record found."
+
+No abstract:
+"Reference verified, but no abstract was available for semantic analysis."
+
+Model failure:
+"Local semantic model could not process this citation."
+
+Do not show stack traces in production UI.
+
+Log technical details locally.
+
+======================================================================
+23. PRIVACY
+======================================================================
+
+Explain accurately:
+
+Uploaded papers are stored locally on the machine hosting the application.
+
+Metadata queries send citation/title/DOI information to:
+- Crossref
+- Semantic Scholar
+
+Do not claim the entire paper is private if citation query content leaves the machine.
+
+Do not send full PDF contents externally.
+
+======================================================================
+24. NO MOCK DATA POLICY
+======================================================================
+
+STRICT REQUIREMENT:
+
+No part of the production UI may display:
+- fake paper metadata
+- fake references
+- fake authors
+- fake citation counts
+- random similarity scores
+- placeholder charts
+- placeholder graph nodes
+- placeholder verification states
+
+If there is no real data:
+show an empty state.
+
+Example:
+"No verified references available for graph visualization."
+
+Development fixture files may exist under tests/ only.
+
+They must never be used by production frontend.
+
+======================================================================
+25. TESTING
+======================================================================
+
+BACKEND UNIT TESTS
+
+Test:
+- title normalization
+- DOI extraction
+- year extraction
+- IEEE reference splitting
+- numeric citation parsing
+- citation ranges
+- fuzzy matching
+- metadata score
+- semantic label threshold
+- overclaim keywords
+- cache read/write
+- file hashing
+
+INTEGRATION TESTS
+
+Use sample public research papers.
+
+Test:
+- upload
+- extraction
+- references
+- API verification
+- semantic analysis
+- result JSON
+- export
+
+API calls may be recorded/mocked in automated tests only.
+Production must use real API responses.
+
+FRONTEND TESTS
+
+Verify:
+- no mock cards appear
+- correct empty states
+- loading state
+- API error state
+- result rendering
+- filtering
+- export
+
+======================================================================
+26. FRONTEND UX DETAILS
+======================================================================
+
+UPLOAD STATE
+
+Before upload:
+clean empty upload area.
+
+During upload:
+show progress only if actual progress is available.
+Otherwise use:
+"Uploading..."
+
+ANALYSIS STATE
+
+Show actual stages:
+- Extracting text
+- Parsing references
+- Verifying metadata
+- Computing semantic relevance
+- Building report
+
+Do not show fake percentages unless backend sends real progress.
+
+FILTERS
+
+Allow filtering by:
+- All
+- Verified
+- Probable
+- Needs review
+- Unverified
+- Strong context
+- Weak context
+- Overclaim flag
+
+SEARCH
+
+Search within references by:
+- title
+- author
+- DOI
+- raw reference
+
+SORT
+
+Allow:
+- reference number
+- verification confidence
+- semantic similarity
+- overall score
+
+======================================================================
+27. VISUAL RULES
+======================================================================
+
+BODY
+background: white
+
+Secondary surface:
+very light gray
+
+Borders:
+#E5E7EB-like neutral
+
+Text:
+dark neutral
+
+Accent:
+use one restrained blue, green, or teal
+
+Do not combine blue and purple gradients.
+
+Use color sparingly.
+
+Cards:
+bordered, low shadow or no shadow.
+
+Corners:
+6–10 px.
+
+Buttons:
+clear rectangular controls.
+
+Tables:
+professional data-table style.
+
+No excessive animations.
+
+Use transitions only for:
+- hover
+- drawer
+- filter
+- graph interactions
+
+======================================================================
+28. ACCESSIBILITY
+======================================================================
+
+- semantic HTML
+- keyboard navigation
+- visible focus states
+- proper labels
+- accessible contrast
+- status text in addition to color
+- ARIA labels where required
+
+======================================================================
+29. PERFORMANCE
+======================================================================
+
+Requirements:
+- model loaded once
+- batch embeddings
+- cache metadata requests
+- avoid reprocessing same PDF
+- lazy render large details
+- use pagination or virtualization if references are very large
+
+Target:
+Typical 10–20 page academic PDF with 20–60 references should be manageable on a normal laptop.
+
+Do not claim a fixed processing time unless benchmarked.
+
+======================================================================
+30. SECURITY
+======================================================================
+
+- accept PDF only
+- validate MIME and extension
+- filename sanitization
+- no shell execution
+- no arbitrary file paths
+- max file size
+- API request timeouts
+- no eval
+- no executing content from PDFs
+- CORS configured properly
+- protect against path traversal
+- restrict download endpoints to known paper IDs
+
+======================================================================
+31. CONFIGURATION
+======================================================================
+
+Use .env or config.py for:
+
+MAX_PDF_SIZE_MB
+CROSSREF_BASE_URL
+SEMANTIC_SCHOLAR_BASE_URL
+SEMANTIC_SCHOLAR_API_KEY optional
+MODEL_NAME
+CACHE_TTL_DAYS
+TITLE_MATCH_THRESHOLD
+STRONG_CONTEXT_THRESHOLD
+MODERATE_CONTEXT_THRESHOLD
+WEAK_CONTEXT_THRESHOLD
+TOP_K
+UPLOAD_DIR
+CACHE_DIR
+RESULT_DIR
+
+Do not hardcode sensitive keys.
+
+======================================================================
+32. LOGGING
+======================================================================
+
+Local log file:
+logs/app.log
+
+Log:
+- paper ID
+- upload event
+- extraction result
+- number references
+- API success/error
+- cache hits/misses
+- model errors
+- pipeline completion
+
+Do not log entire PDF contents.
+
+======================================================================
+33. TXT REPORT FORMAT
+======================================================================
+
+The application must support exporting a detailed .txt report.
+
+Example:
+
+CITATION VERIFIER REPORT
+========================
+
+Paper:
+Filename:
+Pages:
+Analysis ID:
+
+SUMMARY
+-------
+References detected:
+Verified exact:
+Probable matches:
+Metadata mismatches:
+Unverified:
+
+REFERENCE 1
+-----------
+Extracted:
+...
+
+Verification:
+Verified Exact Match
+
+Matched paper:
+...
+
+DOI:
+...
+
+Title similarity:
+...
+
+Author match:
+...
+
+Year match:
+...
+
+Citation Context 1:
+...
+
+Semantic similarity:
+0.78
+
+Classification:
+Strongly related
+
+Review flags:
+None
+
+Repeat for all references.
+
+End with:
+
+METHODOLOGY NOTES
+-----------------
+- Citation existence verified using Crossref and/or Semantic Scholar.
+- Semantic relevance computed using local sentence embeddings.
+- Similarity values are heuristic and do not prove scientific correctness.
+- Overclaim flags are heuristic review indicators.
+- No external generative AI service was used.
+
+======================================================================
+34. README REQUIREMENTS
+======================================================================
+
+README must include:
+
+- problem statement
+- screenshots
+- architecture
+- stack
+- setup
+- run backend
+- run frontend
+- model download
+- API configuration
+- project folders
+- scoring methodology
+- semantic thresholds
+- limitations
+- privacy note
+- known citation parsing limitations
+- roadmap
+
+======================================================================
+35. IMPORTANT LIMITATIONS TO DOCUMENT
+======================================================================
+
+The project must openly state:
+
+- Semantic similarity does not prove citation correctness.
+- Abstracts may not contain every conclusion from full papers.
+- Crossref metadata may be incomplete.
+- Semantic Scholar metadata may be incomplete.
+- Citation parsing is imperfect across styles.
+- Scanned PDFs require OCR, which is not part of v1.
+- Citation counts indicate visibility, not truth or quality.
+- Paywalled full text may not be available.
+- Overclaim detection is heuristic.
+- The tool assists academic review; it does not replace peer review.
+
+======================================================================
+36. MVP REQUIREMENTS
+======================================================================
+
+MVP must include all of:
+
+1. PDF upload
+2. PDF text extraction
+3. reference section detection
+4. reference parsing
+5. in-text citation extraction
+6. Crossref verification
+7. Semantic Scholar verification
+8. local Sentence-BERT embeddings
+9. semantic relevance scoring
+10. FAISS reference ranking
+11. metadata mismatch reporting
+12. potential hallucinated reference flag
+13. overclaim heuristic
+14. real summary statistics
+15. reference detail view
+16. citation context view
+17. citation network
+18. TXT export
+19. JSON export
+20. local cache
+21. no database
+22. no external AI API
+23. no mock production data
+
+======================================================================
+37. OPTIONAL POST-MVP FEATURES
+======================================================================
+
+Only after MVP works:
+
+- support DOCX
+- DOI batch verification
+- BibTeX upload
+- RIS upload
+- bibliography correction suggestions
+- duplicate citation detection
+- reference formatting detection
+- missing bibliography entry detection
+- unused bibliography entry detection
+- citation density heatmap by page
+- citation diversity metrics
+- self-citation analysis
+- publication age distribution
+- source venue grouping
+- full-text verification for open-access papers
+- OpenAlex integration
+- PubMed integration
+- arXiv integration
+- scholarly model such as SPECTER
+- plagiarism-independent claim tracing
+
+======================================================================
+38. DEVELOPMENT ORDER
+======================================================================
+
+PHASE 1
+Backend foundation
+- FastAPI
+- folders
+- upload
+- hashing
+- PyMuPDF
+
+PHASE 2
+Citation extraction
+- references
+- in-text citations
+- mapping
+
+PHASE 3
+Metadata verification
+- Crossref
+- Semantic Scholar
+- caching
+- fuzzy matching
+
+PHASE 4
+Semantic engine
+- local Sentence-BERT
+- FAISS
+- relevance scoring
+- ranking
+
+PHASE 5
+Scoring + flags
+- verification score
+- citation relevance
+- overclaim heuristic
+
+PHASE 6
+Frontend
+- upload
+- results
+- filters
+- details
+- graph
+
+PHASE 7
+Exports
+- JSON
+- TXT
+
+PHASE 8
+Testing
+- real papers
+- malformed references
+- API failures
+
+PHASE 9
+Documentation
+- methodology
+- README
+- limitations
+
+======================================================================
+39. DEFINITION OF DONE
+======================================================================
+
+The project is only complete when:
+
+- a real research PDF can be uploaded
+- references are extracted from that PDF
+- citations are mapped to bibliography entries
+- external academic APIs are queried
+- actual metadata is shown
+- local NLP computes similarity
+- FAISS is used for vector ranking
+- results survive page refresh via local result files
+- no database is required
+- no generative AI API is used
+- no fake data appears in production
+- TXT report can be exported
+- JSON report can be exported
+- frontend uses a white academic design
+- errors are handled gracefully
+- scoring is explainable
+- methodology is documented
+- limitations are documented
+
+======================================================================
+40. IMPLEMENTATION RULES FOR THE CODING MODEL
+======================================================================
+
+When implementing this project:
+
+1. Do not replace difficult features with mock data.
+2. Do not skip actual Crossref / Semantic Scholar integration.
+3. Do not invent citation results.
+4. Do not use OpenAI/Gemini/Claude APIs.
+5. Do not add a database.
+6. Do not add authentication unless explicitly requested later.
+7. Do not create a dark mode.
+8. Do not use template-like AI visual design.
+9. Keep components modular.
+10. Keep backend services separated.
+11. Use proper error handling.
+12. Preserve raw reference text.
+13. Cache external API results.
+14. Expose scoring components to frontend.
+15. Do not silently classify unavailable data as negative.
+16. Use "unknown" or "unavailable" states.
+17. Never claim semantic similarity proves factual correctness.
+18. Never label a paper fraudulent based only on heuristics.
+19. Keep the frontend functional before decorative.
+20. Every graph, number, score, and status shown to the user must originate from actual analysis output.
+
+FINAL PRODUCT POSITIONING
+
+Citation Verifier is a transparent research-integrity platform that verifies whether academic references exist, compares extracted metadata with trusted scholarly sources, measures whether citations are semantically related to the claims in which they are used, and highlights references that require human review.
+The key engineering differentiator is that semantic verification runs locally using sentence embeddings and FAISS, while publication existence and metadata are checked against real scholarly services.
+The product must feel like serious academic software rather than a generic AI wrapper.

@@ -1,0 +1,143 @@
+CITATION VERIFIER - METHODOLOGY
+=====================================
+
+1. OBJECTIVE
+------------
+To verify whether citations:
+- exist
+- are correctly referenced
+- are relevant to the claim
+
+--------------------------------------------------
+
+2. CITATION EXTRACTION
+
+Step 1:
+- Extract full text from PDF
+
+Step 2:
+- Identify reference section
+
+Step 3:
+- Parse references into structured data
+
+Step 4:
+- Extract in-text citations
+
+--------------------------------------------------
+
+3. METADATA VERIFICATION
+
+For each reference:
+- Extract title, authors, year, DOI
+
+Verification process:
+1. If DOI exists:
+   → direct lookup (Crossref)
+2. Else:
+   → search by title
+
+Matching criteria:
+- title similarity
+- author match
+- year match
+
+Classification:
+- Verified exact
+- Verified probable
+- Metadata mismatch
+- Not found
+
+--------------------------------------------------
+
+4. SEMANTIC SIMILARITY
+
+Step 1:
+- Extract citation context (sentence ± neighbors)
+
+Step 2:
+- Get abstract of cited paper
+
+Step 3:
+- Convert both to embeddings using Sentence-BERT
+
+Step 4:
+- Compute cosine similarity
+
+--------------------------------------------------
+
+5. SIMILARITY INTERPRETATION
+
+>= 0.78 → Strong match
+0.62–0.77 → Moderate
+0.45–0.61 → Weak
+< 0.45 → Likely unrelated
+
+These are heuristic thresholds.
+
+--------------------------------------------------
+
+6. FAISS RANKING
+
+- Store all reference embeddings
+- Compare citation context against all
+- Rank references by similarity
+
+Insight:
+If cited paper ranks low → possible issue
+
+--------------------------------------------------
+
+7. SCORING SYSTEM
+
+Metadata Score:
+- DOI match
+- Title similarity
+- Author match
+- Year match
+
+Relevance Score:
+- cosine similarity
+
+Overall Score:
+weighted combination
+
+--------------------------------------------------
+
+8. OVERCLAIM DETECTION
+
+Detect strong claim words:
+- proves, always, guarantees, etc.
+
+If:
+- strong wording + low similarity
+→ flag as potential overclaim
+
+--------------------------------------------------
+
+9. OUTPUT GENERATION
+
+For each citation:
+- verification status
+- similarity score
+- classification
+- flags
+
+Also generate:
+- summary stats
+- TXT report
+- JSON report
+
+--------------------------------------------------
+
+10. LIMITATIONS
+
+- similarity ≠ correctness
+- abstracts incomplete
+- parsing may fail
+- API may be incomplete
+- heuristics not perfect
+
+--------------------------------------------------
+
+END OF METHODOLOGY

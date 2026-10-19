@@ -1,0 +1,70 @@
+# Environments
+venv/
+.venv/
+env/
+ENV/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Node / Frontend
+node_modules/
+frontend/node_modules/
+frontend/dist/
+frontend/dist-ssr/
+*.local
+
+# Environment & secrets
+.env
+.env.*
+!.env.example
+
+# Local storage and data (preserve structure with .gitkeep)
+uploads/*
+!uploads/.gitkeep
+data/*
+!data/.gitkeep
+cache/*
+!cache/.gitkeep
+results/*
+!results/.gitkeep
+logs/*
+!logs/.gitkeep
+
+backend/uploads/*
+!backend/uploads/.gitkeep
+backend/data/*
+!backend/data/.gitkeep
+backend/cache/*
+!backend/cache/.gitkeep
+backend/results/*
+!backend/results/.gitkeep
+backend/logs/*
+!backend/logs/.gitkeep
+
+# OS generated
+.DS_Store
+Thumbs.db
+desktop.ini
