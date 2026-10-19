@@ -1,1 +1,5 @@
-https://github.com/v3ravani/Citation-Verifier
+Citation Verifier - GitHub Repository
+====================================
+Repository: https://github.com/v3ravani/Citation-Verifier
+Branch: main
+Commit: 9aec4082de69cba7713a84273e76111c7270839a
