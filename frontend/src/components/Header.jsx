@@ -24,6 +24,14 @@ export default function Header({ onNavigate, activeView, onOpenMethodology }) {
             <span>Upload Document</span>
           </button>
 
+          <button
+            className={`nav-btn ${activeView === "suggester" ? "active" : ""}`}
+            onClick={() => onNavigate("suggester")}
+          >
+            <BookOpen size={16} />
+            <span>Citation Suggester</span>
+          </button>
+
           <button className="nav-btn" onClick={onOpenMethodology}>
             <Info size={16} />
             <span>Methodology</span>

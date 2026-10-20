@@ -12,13 +12,30 @@ def split_raw_references(ref_text: str) -> List[tuple[int, str, str]]:
     if not ref_text or not ref_text.strip():
         return []
 
+    # First check if references are inline delimited by slashes, e.g.:
+    # "1 UNEP ...  /  2 World Bank ...  /  3 Skerritt ..."
+    if " / " in ref_text and re.search(r'\s+/\s+\d+\b', ref_text):
+        slash_tokens = re.split(r'\s+/\s+(?=\d+\b)', ref_text)
+        entries = []
+        for token in slash_tokens:
+            m = re.match(r'^\s*(\d+)\s+(.*)', token, re.DOTALL)
+            if m:
+                idx = int(m.group(1))
+                entries.append((idx, f"[{idx}]", " ".join(m.group(2).split())))
+            elif len(token.strip()) > 15:
+                entries.append((len(entries) + 1, f"[{len(entries) + 1}]", " ".join(token.split())))
+        if len(entries) >= 2:
+            return entries
+
     lines = ref_text.splitlines()
     entries = []
 
     # Check for [1], [2] style
     numeric_bracket_pattern = re.compile(r'^\s*\[(\d+)\]\s*(.*)$')
     # Check for 1., 2. style
-    numbered_dot_pattern = re.compile(r'^\s*(\d+)\.\s+(.*)$')
+    numbered_dot_pattern = re.compile(r'^\s*(\d+)[\.:]\s+(.*)$')
+    # Check for 1 Author style without punctuation after number
+    numbered_space_pattern = re.compile(r'^\s*(\d+)\s+([A-Z][A-Za-z\s,\.\-&]+.*)$')
     # Check for APA author (year) style at line start
     apa_start_pattern = re.compile(r'^[A-Z][A-Za-z\s,\.\-&]+\s*\((19\d{2}|20\d{2})\)')
 
@@ -28,10 +45,10 @@ def split_raw_references(ref_text: str) -> List[tuple[int, str, str]]:
 
     # Detect predominant style
     total_bracket = len(re.findall(r'^\s*\[\d+\]', ref_text, re.MULTILINE))
-    total_dot = len(re.findall(r'^\s*\d+\.\s', ref_text, re.MULTILINE))
+    total_dot = len(re.findall(r'^\s*\d+[\.:]\s+', ref_text, re.MULTILINE))
+    total_num_space = len(re.findall(r'^\s*\d+\s+[A-Z]', ref_text, re.MULTILINE))
 
     if total_bracket >= 2:
-        # Numeric bracket style [1]
         for line in lines:
             m = numeric_bracket_pattern.match(line)
             if m:
@@ -48,9 +65,24 @@ def split_raw_references(ref_text: str) -> List[tuple[int, str, str]]:
             entries.append((current_idx, current_marker, " ".join(current_lines).strip()))
 
     elif total_dot >= 2:
-        # Numbered dot style: 1.
         for line in lines:
             m = numbered_dot_pattern.match(line)
+            if m:
+                if current_lines:
+                    entries.append((current_idx, current_marker, " ".join(current_lines).strip()))
+                    current_lines = []
+                current_idx = int(m.group(1))
+                current_marker = f"[{current_idx}]"
+                current_lines.append(m.group(2))
+            else:
+                if current_lines is not None:
+                    current_lines.append(line.strip())
+        if current_lines:
+            entries.append((current_idx, current_marker, " ".join(current_lines).strip()))
+
+    elif total_num_space >= 2:
+        for line in lines:
+            m = numbered_space_pattern.match(line)
             if m:
                 if current_lines:
                     entries.append((current_idx, current_marker, " ".join(current_lines).strip()))
@@ -80,11 +112,9 @@ def split_raw_references(ref_text: str) -> List[tuple[int, str, str]]:
         if current_lines:
             entries.append((gen_idx, f"Ref {gen_idx}", " ".join(current_lines).strip()))
 
-    # Clean entries
     cleaned_entries = []
     for idx, marker, raw in entries:
         clean_raw = " ".join(raw.split())
-        # Filter out noise entries (e.g. empty or page footers)
         if len(clean_raw) > 15:
             cleaned_entries.append((idx or len(cleaned_entries) + 1, marker, clean_raw))
 
@@ -111,7 +141,6 @@ def extract_reference_title(raw_text: str) -> Optional[str]:
     text_clean = re.sub(r'^\s*\[?\d+\]?\.?\s*', '', raw_text)
     parts = text_clean.split(". ")
     if len(parts) >= 2:
-        # Often parts[1] is the title
         candidate = parts[1].strip()
         if len(candidate) > 15 and not any(w in candidate.lower() for w in ["vol", "pp", "pages", "proceedings"]):
             return candidate.rstrip(".,")

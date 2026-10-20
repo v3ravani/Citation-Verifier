@@ -54,3 +54,20 @@ def test_cache_status():
     data = resp.json()
     assert data["status"] == "active"
     assert "total_cached_queries" in data
+
+def test_annotated_pdf_not_found():
+    resp = client.get("/api/report/nonexistent9999/annotated-pdf")
+    assert resp.status_code == 404
+
+def test_suggest_citations_validation_error():
+    # Too short (< 15 characters)
+    resp = client.post("/api/suggest-citations", json={"text": "short"})
+    assert resp.status_code == 422
+
+def test_annotated_pdf_export_for_verified_paper():
+    # eb774d3c80ab6663 exists in results
+    resp = client.get("/api/report/eb774d3c80ab6663/annotated-pdf")
+    assert resp.status_code == 200
+    assert resp.headers["content-type"] == "application/pdf"
+    assert len(resp.content) > 1000
+

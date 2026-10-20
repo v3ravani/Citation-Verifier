@@ -1,10 +1,11 @@
 import React, { useState } from "react";
-import { Download, RefreshCw, FileText, Share2, ArrowLeft, Calendar, FileCheck, Hash } from "lucide-react";
+import { Download, RefreshCw, FileText, Share2, ArrowLeft, Calendar, FileCheck, Hash, Sparkles } from "lucide-react";
 import SummaryCards from "../components/SummaryCards";
 import ReferenceTable from "../components/ReferenceTable";
 import ReferenceDetailsModal from "../components/ReferenceDetailsModal";
-import CitationGraph from "../components/CitationGraph";
-import { getTxtExportUrl, getJsonExportUrl, analyzePaperById } from "../api/client";
+import CitationGraph3D from "../components/CitationGraph3D";
+import CitationSuggester from "../components/CitationSuggester";
+import { getTxtExportUrl, getJsonExportUrl, getAnnotatedPdfExportUrl, analyzePaperById } from "../api/client";
 
 export default function Analysis({ result, onBack, onUpdateResult }) {
   const [selectedReference, setSelectedReference] = useState(null);
@@ -86,13 +87,25 @@ export default function Analysis({ result, onBack, onUpdateResult }) {
           </button>
 
           <a
+            href={getAnnotatedPdfExportUrl(paper.id)}
+            download
+            className="btn-primary"
+            style={{ textDecoration: "none", display: "inline-flex", alignItems: "center", gap: "0.35rem" }}
+            title="Export original PDF with precise green/yellow/red highlights and sticky review notes"
+          >
+            <Download size={14} />
+            <span>Export Annotated PDF</span>
+            <span style={{ fontSize: "0.7rem", backgroundColor: "rgba(255,255,255,0.25)", padding: "0.1rem 0.35rem", borderRadius: "10px", fontWeight: 700 }}>Flags & Notes</span>
+          </a>
+
+          <a
             href={getTxtExportUrl(paper.id)}
             download
             className="btn-secondary"
             style={{ textDecoration: "none" }}
           >
             <Download size={14} />
-            <span>Export TXT</span>
+            <span>TXT</span>
           </a>
 
           <a
@@ -102,7 +115,7 @@ export default function Analysis({ result, onBack, onUpdateResult }) {
             style={{ textDecoration: "none" }}
           >
             <Download size={14} />
-            <span>Export JSON</span>
+            <span>JSON</span>
           </a>
         </div>
       </div>
@@ -118,7 +131,7 @@ export default function Analysis({ result, onBack, onUpdateResult }) {
       />
 
       {/* View Selector Tabs */}
-      <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "1rem" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "1rem", flexWrap: "wrap" }}>
         <button
           type="button"
           className={`btn-secondary ${activeTab === "table" ? "active" : ""}`}
@@ -146,7 +159,22 @@ export default function Analysis({ result, onBack, onUpdateResult }) {
           }}
         >
           <Share2 size={15} />
-          <span>Citation Relationship Graph</span>
+          <span>3D Citation Graph</span>
+        </button>
+
+        <button
+          type="button"
+          className={`btn-secondary ${activeTab === "suggester" ? "active" : ""}`}
+          onClick={() => setActiveTab("suggester")}
+          style={{
+            backgroundColor: activeTab === "suggester" ? "var(--accent-light)" : "var(--bg-primary)",
+            borderColor: activeTab === "suggester" ? "var(--accent-primary)" : "var(--border-subtle)",
+            color: activeTab === "suggester" ? "var(--accent-primary)" : "var(--text-secondary)",
+            fontWeight: activeTab === "suggester" ? 600 : 500,
+          }}
+        >
+          <Sparkles size={15} />
+          <span>Paragraph Citation Suggester</span>
         </button>
       </div>
 
@@ -158,11 +186,13 @@ export default function Analysis({ result, onBack, onUpdateResult }) {
           activeFilter={activeFilter}
           onFilterChange={setActiveFilter}
         />
-      ) : (
-        <CitationGraph
+      ) : activeTab === "graph" ? (
+        <CitationGraph3D
           graph={graph}
           onSelectReference={handleSelectReferenceFromGraph}
         />
+      ) : (
+        <CitationSuggester />
       )}
 
       {/* Reference Details Modal Drawer */}

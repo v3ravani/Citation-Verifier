@@ -24,10 +24,10 @@ export default function MethodologyModal({ isOpen, onClose }) {
           <div>
             <h4 style={{ fontSize: "0.9375rem", fontWeight: 600, color: "var(--text-primary)", marginBottom: "0.375rem", display: "flex", alignItems: "center", gap: "0.375rem" }}>
               <Search size={16} style={{ color: "var(--accent-primary)" }} />
-              <span>1. Academic Metadata Verification</span>
+              <span>1. Multi-Source Scholarly Metadata Verification</span>
             </h4>
             <p>
-              References are extracted from the bibliography section of uploaded PDFs using PyMuPDF. Every parsed entry is verified deterministically against the <strong>Crossref REST API</strong> and <strong>Semantic Scholar Graph API</strong>. When an explicit DOI exists, exact resolution is prioritized. In the absence of a DOI, fuzzy title and bibliographic matching is performed using normalized token-sort ratios via RapidFuzz.
+              References are extracted from the bibliography section of uploaded PDFs using PyMuPDF. Every parsed entry is cross-verified deterministically against four academic data sources: <strong>Crossref REST API</strong>, <strong>Semantic Scholar Graph API</strong>, <strong>OpenAlex Global Works API</strong>, and <strong>arXiv Preprints API</strong>. When an explicit DOI or arXiv identifier exists, exact resolution is prioritized. In the absence of an identifier, fuzzy title and bibliographic matching is performed using normalized token-sort ratios via RapidFuzz.
             </p>
           </div>
 
@@ -55,10 +55,21 @@ export default function MethodologyModal({ isOpen, onClose }) {
           <div>
             <h4 style={{ fontSize: "0.9375rem", fontWeight: 600, color: "var(--text-primary)", marginBottom: "0.375rem", display: "flex", alignItems: "center", gap: "0.375rem" }}>
               <BarChart2 size={16} style={{ color: "var(--accent-primary)" }} />
-              <span>3. Overclaim Heuristic Rule</span>
+              <span>3. Overclaim Heuristic Rule & Review Annotations</span>
             </h4>
             <p>
-              Strong assertive terminology (e.g., <em>"proves"</em>, <em>"conclusively demonstrates"</em>, <em>"eliminates"</em>, <em>"guarantees"</em>) in a citation sentence is evaluated against semantic alignment scores and abstract evidence. If assertive language is unaccompanied by strong semantic support in the cited abstract, a transparent heuristic review flag is raised.
+              Strong assertive terminology (e.g., <em>"proves"</em>, <em>"conclusively demonstrates"</em>, <em>"eliminates"</em>, <em>"guarantees"</em>) in a citation sentence is evaluated against semantic alignment scores and abstract evidence. If assertive language is unaccompanied by strong semantic support in the cited abstract, a transparent heuristic review flag is raised. Users can export the original PDF with color-coded highlights and inline sticky review notes.
+            </p>
+          </div>
+
+          {/* Section 4 */}
+          <div>
+            <h4 style={{ fontSize: "0.9375rem", fontWeight: 600, color: "var(--text-primary)", marginBottom: "0.375rem", display: "flex", alignItems: "center", gap: "0.375rem" }}>
+              <BookOpen size={16} style={{ color: "var(--accent-primary)" }} />
+              <span>4. Interactive 3D Graph & Paragraph Citation Suggester</span>
+            </h4>
+            <p>
+              A WebGL-powered 3D citation relationship graph visualizes the paper's citation topology and verification health. The Paragraph Citation Suggester allows researchers to paste draft paragraphs to discover and format verified citations in IEEE, APA, and BibTeX styles directly from global scholarly indices.
             </p>
           </div>
 

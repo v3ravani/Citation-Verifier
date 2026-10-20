@@ -8,6 +8,7 @@ from backend.app.nlp.model_loader import get_sentence_model
 from backend.app.api.routes_upload import router as upload_router
 from backend.app.api.routes_analysis import router as analysis_router
 from backend.app.api.routes_results import router as results_router
+from backend.app.api.routes_suggestions import router as suggestions_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -48,6 +49,7 @@ app.add_middleware(
 app.include_router(upload_router)
 app.include_router(analysis_router)
 app.include_router(results_router)
+app.include_router(suggestions_router)
 
 @app.get("/api/health")
 async def health_check():

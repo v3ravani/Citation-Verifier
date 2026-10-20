@@ -3,6 +3,7 @@ import Header from "./components/Header";
 import Home from "./pages/Home";
 import Analysis from "./pages/Analysis";
 import MethodologyModal from "./components/MethodologyModal";
+import CitationSuggester from "./components/CitationSuggester";
 import { getPaperResult } from "./api/client";
 
 export default function App() {
@@ -50,6 +51,7 @@ export default function App() {
         activeView={currentView}
         onNavigate={(view) => {
           if (view === "home") handleBackToUpload();
+          else setCurrentView(view);
         }}
         onOpenMethodology={() => setIsMethodologyOpen(true)}
       />
@@ -57,6 +59,10 @@ export default function App() {
       <main className="main-content">
         {currentView === "home" ? (
           <Home onAnalysisComplete={handleAnalysisComplete} />
+        ) : currentView === "suggester" ? (
+          <div style={{ maxWidth: "1000px", margin: "0 auto", padding: "1rem 0" }}>
+            <CitationSuggester />
+          </div>
         ) : (
           <Analysis
             result={analysisResult}

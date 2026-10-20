@@ -1,4 +1,5 @@
-const API_BASE_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8001";
+// Use relative URL so Vite proxy forwards requests to backend with zero CORS issues
+const API_BASE_URL = import.meta.env.VITE_API_URL || "";
 
 export async function uploadPaperFile(file) {
   const formData = new FormData();
@@ -48,8 +49,34 @@ export function getJsonExportUrl(paperId) {
   return `${API_BASE_URL}/api/report/${paperId}/json`;
 }
 
+export function getAnnotatedPdfExportUrl(paperId) {
+  return `${API_BASE_URL}/api/report/${paperId}/annotated-pdf`;
+}
+
+export async function suggestCitations(text, maxClaims = 3, maxPerClaim = 5) {
+  const response = await fetch(`${API_BASE_URL}/api/suggest-citations`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      text,
+      max_claims: maxClaims,
+      max_per_claim: maxPerClaim,
+    }),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.detail || `Citation suggestion failed (HTTP ${response.status})`);
+  }
+
+  return response.json();
+}
+
 export async function fetchCacheStatus() {
   const response = await fetch(`${API_BASE_URL}/api/cache/status`);
   if (!response.ok) return null;
   return response.json();
 }
+

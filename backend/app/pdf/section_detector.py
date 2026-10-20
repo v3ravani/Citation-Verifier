@@ -2,18 +2,22 @@ import re
 from typing import Tuple, List, Dict, Any, Optional
 from backend.app.core.logging_config import logger
 
-# Common section headers for bibliographies
+# Common section headers for bibliographies and scholarly notes
 REFERENCE_HEADER_PATTERNS = [
     r'^(?:[0-9IVXLCDM]+\.?\s*)?(?:REFERENCES|References)\b',
     r'^(?:[0-9IVXLCDM]+\.?\s*)?(?:BIBLIOGRAPHY|Bibliography)\b',
     r'^(?:[0-9IVXLCDM]+\.?\s*)?(?:WORKS\s+CITED|Works\s+Cited)\b',
     r'^(?:[0-9IVXLCDM]+\.?\s*)?(?:LITERATURE\s+CITED|Literature\s+Cited)\b',
+    r'^(?:[0-9IVXLCDM]+\.?\s*)?(?:NOTES|Notes)\b',
+    r'^(?:[0-9IVXLCDM]+\.?\s*)?(?:ENDNOTES|Endnotes)\b',
+    r'^(?:[0-9IVXLCDM]+\.?\s*)?(?:REFERENCES\s+&?\s*CITATIONS|References\s+&?\s*Citations)\b',
 ]
 
 # Sections that might follow references
 TERMINATING_HEADER_PATTERNS = [
     r'^(?:[0-9IVXLCDM]+\.?\s*)?(?:APPENDIX|Appendix|Appendices)\b',
     r'^(?:[0-9IVXLCDM]+\.?\s*)?(?:BIOGRAPHY|Biography|BIOGRAPHIES|Biographies|Authors?\s+Biography)\b',
+    r'^(?:FIND\s+OUT\s+MORE|Find\s+out\s+more)\b',
 ]
 
 def detect_reference_section(
@@ -33,9 +37,8 @@ def detect_reference_section(
     header_matched_text = None
 
     # Search backwards from the end of the document to find the primary References header
-    # Usually in the last 40% of the document
     num_pages = len(pages_data)
-    min_page_idx = max(0, int(num_pages * 0.4)) if num_pages > 2 else 0
+    min_page_idx = max(0, int(num_pages * 0.3)) if num_pages > 2 else 0
 
     for page_idx in range(num_pages - 1, min_page_idx - 1, -1):
         lines = pages_data[page_idx]["text"].split("\n")
@@ -54,7 +57,6 @@ def detect_reference_section(
     if found_page_idx is not None:
         logger.info(f"Detected reference section header '{header_matched_text}' on page {found_page_idx + 1}")
         
-        # Build body text: all pages before found_page_idx, plus lines before header on found_page_idx
         body_parts = []
         for p in range(found_page_idx):
             body_parts.append(pages_data[p]["text"])
@@ -63,12 +65,10 @@ def detect_reference_section(
         body_parts.append("\n".join(target_page_lines[:found_line_idx]))
         body_text = "\n\n".join(body_parts)
 
-        # Build reference text: lines after header on found_page_idx, plus following pages
         ref_parts = ["\n".join(target_page_lines[found_line_idx + 1:])]
         
         for p in range(found_page_idx + 1, num_pages):
             p_text = pages_data[p]["text"]
-            # Check if an appendix or biography starts
             p_lines = p_text.split("\n")
             term_idx = None
             for l_idx, l in enumerate(p_lines):
@@ -84,20 +84,17 @@ def detect_reference_section(
         references_text = "\n\n".join(ref_parts)
         return body_text, references_text, pages_data[found_page_idx]["page_number"], None
 
-    # Fallback heuristic: Look for bracketed entries [1], [2], [3] in the last 30% of pages
+    # Fallback heuristic: Look for bracketed entries [1], [2], [3] in the last 40% of pages
     logger.warning("No explicit reference header found. Trying heuristic fallback based on numbered entries.")
     for page_idx in range(num_pages - 1, min_page_idx - 1, -1):
         text = pages_data[page_idx]["text"]
         matches = re.findall(r'^\s*\[\d+\]', text, re.MULTILINE)
         if len(matches) >= 3:
-            # We found a page with dense references
-            # Use this page as the start of references
             body_parts = [pages_data[p]["text"] for p in range(page_idx)]
             ref_parts = [pages_data[p]["text"] for p in range(page_idx, num_pages)]
             warning = "Reference section detected via heuristic pattern matching (no standard heading found)."
             return "\n\n".join(body_parts), "\n\n".join(ref_parts), pages_data[page_idx]["page_number"], warning
 
-    # If completely not found
     warning = "Could not detect a distinct reference section in the document."
     logger.warning(warning)
     full_text = "\n\n".join([p["text"] for p in pages_data])
