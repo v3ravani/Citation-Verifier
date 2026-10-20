@@ -2,4 +2,4 @@ Citation Verifier - GitHub Repository
 ====================================
 Repository: https://github.com/v3ravani/Citation-Verifier
 Branch: main
-Commit: 673ca7aa63e2aafd25ac9b7220284a439bc45898
+Commit: 2d57348dab0232c8dbb52a83485a5e01bc5f3dda
