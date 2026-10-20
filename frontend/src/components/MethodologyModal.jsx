@@ -24,10 +24,10 @@ export default function MethodologyModal({ isOpen, onClose }) {
           <div>
             <h4 style={{ fontSize: "0.9375rem", fontWeight: 600, color: "var(--text-primary)", marginBottom: "0.375rem", display: "flex", alignItems: "center", gap: "0.375rem" }}>
               <Search size={16} style={{ color: "var(--accent-primary)" }} />
-              <span>1. 7-Source Scholarly Consensus & Retraction Verification</span>
+              <span>1. 10-Registry Scholarly Consensus, Hallucination & Retraction Audit</span>
             </h4>
             <p>
-              References are extracted from the bibliography section of uploaded PDFs using PyMuPDF. Every parsed entry is cross-verified deterministically against seven academic data registries: <strong>Crossref REST API</strong>, <strong>Semantic Scholar Graph API</strong>, <strong>OpenAlex Global Works API</strong>, <strong>arXiv Preprints API</strong>, <strong>Europe PMC Life Sciences API</strong>, <strong>DBLP Computer Science Bibliography</strong>, and <strong>DataCite Research Outputs Registry</strong>. When an explicit DOI or arXiv identifier exists, exact resolution is prioritized. In the absence of an identifier, multi-source query searches synthesize consensus. Retracted publications are automatically flagged using registry withdrawal databases.
+              References are extracted from the bibliography section of uploaded PDFs using PyMuPDF. Every parsed entry is cross-verified deterministically against ten authoritative academic data registries: <strong>Crossref REST API</strong>, <strong>Semantic Scholar Graph API</strong>, <strong>OpenAlex Global Works API</strong>, <strong>arXiv Preprints API</strong>, <strong>Europe PMC Life Sciences API</strong>, <strong>DBLP Computer Science Bibliography</strong>, <strong>DataCite Research Outputs Registry</strong>, <strong>PubMed / NCBI MEDLINE API</strong>, <strong>DOAJ (Directory of Open Access Journals)</strong>, and <strong>HAL Open Science Archives</strong>. Multi-source consensus detection catches AI-generated / phantom citations with 0% author/title registry presence and flags journal accreditation. Retracted publications are automatically flagged using global withdrawal notices.
             </p>
           </div>
 

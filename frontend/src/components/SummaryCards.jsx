@@ -1,5 +1,5 @@
 import React from "react";
-import { CheckCircle2, HelpCircle, AlertTriangle, XCircle, FileText, Target, AlertOctagon, ShieldAlert, Award } from "lucide-react";
+import { CheckCircle2, HelpCircle, AlertTriangle, XCircle, FileText, Target, AlertOctagon, ShieldAlert, Award, ShieldCheck } from "lucide-react";
 
 export default function SummaryCards({ summary, onFilterClick, activeFilter }) {
   if (!summary) return null;
@@ -47,6 +47,15 @@ export default function SummaryCards({ summary, onFilterClick, activeFilter }) {
       border: "var(--status-probable-border)",
     },
     {
+      id: "peer_reviewed",
+      label: "Peer-Reviewed",
+      value: summary.peer_reviewed_count || 0,
+      icon: ShieldCheck,
+      color: "#059669",
+      bg: "#ecfdf5",
+      border: "#a7f3d0",
+    },
+    {
       id: "metadata_mismatch",
       label: "Metadata Mismatch",
       value: summary.metadata_mismatch,
@@ -65,8 +74,17 @@ export default function SummaryCards({ summary, onFilterClick, activeFilter }) {
       border: (summary.retracted_citations_count || 0) > 0 ? "#fca5a5" : "var(--border-subtle)",
     },
     {
+      id: "hallucination",
+      label: "Hallucination Risk",
+      value: summary.hallucination_risk_count || 0,
+      icon: XCircle,
+      color: (summary.hallucination_risk_count || 0) > 0 ? "#dc2626" : "var(--text-muted)",
+      bg: (summary.hallucination_risk_count || 0) > 0 ? "#fef2f2" : "var(--bg-primary)",
+      border: (summary.hallucination_risk_count || 0) > 0 ? "#fca5a5" : "var(--border-subtle)",
+    },
+    {
       id: "unverified",
-      label: "Unverified / Hallucinated",
+      label: "Unverified",
       value: summary.unverified,
       icon: XCircle,
       color: "var(--status-unverified-text)",

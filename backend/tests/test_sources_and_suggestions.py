@@ -238,3 +238,88 @@ def test_exports_bibtex_csv_markdown():
     assert "# Citation Verification" in md_report
     assert "Executive Summary" in md_report
     assert "Reference Verification Table" in md_report
+
+def test_parse_pubmed_summary():
+    from backend.app.metadata.pubmed import parse_pubmed_summary
+    sample_summary = {
+        "title": "SARS-CoV-2 Spike Protein Structure and Evolution",
+        "authors": [{"name": "Walls AC"}, {"name": "Park YJ"}],
+        "pubdate": "2020 Mar 9",
+        "source": "Cell",
+        "articleids": [{"idtype": "doi", "value": "10.1016/j.cell.2020.02.058"}, {"idtype": "pubmed", "value": "32155444"}],
+        "pubtype": ["Journal Article"],
+        "nlmuniqueid": "0413066"
+    }
+    parsed = parse_pubmed_summary("32155444", sample_summary)
+    assert parsed["title"] == "SARS-CoV-2 Spike Protein Structure and Evolution"
+    assert parsed["year"] == 2020
+    assert len(parsed["authors"]) == 2
+    assert parsed["doi"] == "10.1016/j.cell.2020.02.058"
+    assert parsed["is_medline_indexed"] is True
+    assert parsed["is_retracted"] is False
+    assert parsed["source"] == "pubmed"
+
+def test_parse_doaj_article():
+    from backend.app.metadata.doaj import parse_doaj_article
+    sample_item = {
+        "bibjson": {
+            "title": "Open Access Transformer Models for Low-Resource Languages",
+            "author": [{"name": "Maria Garcia"}, {"name": "Luca Rossi"}],
+            "year": "2023",
+            "journal": {"title": "Journal of Machine Learning Research"},
+            "identifier": [{"type": "doi", "id": "10.5555/jmlr.2023.01"}],
+            "abstract": "We present open transformer architectures evaluated on twenty low-resource languages."
+        }
+    }
+    parsed = parse_doaj_article(sample_item)
+    assert "Transformer Models" in parsed["title"]
+    assert parsed["year"] == 2023
+    assert parsed["is_doaj_indexed"] is True
+    assert parsed["doi"] == "10.5555/jmlr.2023.01"
+    assert parsed["source"] == "doaj"
+
+def test_parse_hal_doc():
+    from backend.app.metadata.hal import parse_hal_doc
+    sample_doc = {
+        "title_s": ["Decentralized Federated Learning over Heterogeneous Networks"],
+        "authFullName_s": ["Jean Dupont", "Claire Martin"],
+        "producedDateY_i": 2022,
+        "journalTitle_s": "IEEE Transactions on Signal Processing",
+        "doiId_s": "10.1109/TSP.2022.001",
+        "uri_s": "https://hal.science/hal-03456789",
+        "abstract_s": ["We analyze convergence guarantees for non-IID federated training."]
+    }
+    parsed = parse_hal_doc(sample_doc)
+    assert "Decentralized Federated Learning" in parsed["title"]
+    assert parsed["year"] == 2022
+    assert len(parsed["authors"]) == 2
+    assert parsed["doi"] == "10.1109/tsp.2022.001"
+    assert parsed["source"] == "hal"
+
+def test_html_report_generation():
+    from backend.app.services.report_generator import generate_html_report
+    loaded = get_analysis_result("eb774d3c80ab6663")
+    assert loaded is not None
+    res = AnalysisResult.model_validate(loaded)
+    html = generate_html_report(res)
+    assert "<!DOCTYPE html>" in html
+    assert "VERITAS Citation Verifier" in html
+    assert "Integrity Score" in html
+    assert "Audit Trail & Bibliographic Verification" in html
+
+def test_mla_and_chicago_formatters():
+    from backend.app.services.citation_suggester import format_mla, format_chicago
+    authors = ["Ashish Vaswani", "Noam Shazeer"]
+    title = "Attention is all you need"
+    venue = "Advances in Neural Information Processing Systems"
+    year = 2017
+    doi = "10.5555/3295222.3295349"
+
+    mla = format_mla(authors, title, venue, year, doi)
+    assert "Vaswani, Ashish, and Noam Shazeer." in mla
+    assert '"Attention is all you need."' in mla
+
+    chicago = format_chicago(authors, title, venue, year, doi)
+    assert "Vaswani, Ashish" in chicago
+    assert "2017." in chicago
+

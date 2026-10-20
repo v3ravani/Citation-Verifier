@@ -4,8 +4,10 @@ from typing import Optional
 from backend.app.services.citation_suggester import (
     suggest_citations_for_paragraph,
     detect_citation_gaps_in_text,
+    search_reference_recommendations,
     ParagraphSuggestionResponse,
-    CitationGapsResponse
+    CitationGapsResponse,
+    TopicSearchResponse
 )
 from backend.app.services.result_manager import get_extracted_text, sanitize_paper_id
 from backend.app.core.logging_config import logger
@@ -17,6 +19,11 @@ class SuggestionRequest(BaseModel):
     max_claims: Optional[int] = Field(default=3, ge=1, le=10)
     max_per_claim: Optional[int] = Field(default=5, ge=1, le=10)
 
+class TopicSearchRequest(BaseModel):
+    query: str = Field(..., min_length=3, description="Topic or research question to discover references for.")
+    filter_mode: Optional[str] = Field(default="general", description="'general', 'seminal', 'recent', or 'open_access'")
+    limit: Optional[int] = Field(default=8, ge=1, le=20)
+
 class CitationGapRequest(BaseModel):
     paper_id: Optional[str] = None
     text: Optional[str] = None
@@ -25,8 +32,8 @@ class CitationGapRequest(BaseModel):
 @router.post("/suggest-citations", response_model=ParagraphSuggestionResponse)
 async def suggest_citations(req: SuggestionRequest):
     """
-    Analyzes an input paragraph or claim, queries 6 global scholarly registries,
-    computes Sentence-BERT semantic similarity, and generates citations formatted in IEEE, APA, and BibTeX.
+    Analyzes an input paragraph or claim, queries 10 global scholarly registries,
+    computes Sentence-BERT semantic similarity, and generates citations formatted in IEEE, APA, MLA, Chicago, and BibTeX.
     """
     try:
         response = await suggest_citations_for_paragraph(
@@ -40,6 +47,26 @@ async def suggest_citations(req: SuggestionRequest):
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Citation suggestion failed: {str(e)}"
+        )
+
+@router.post("/search-references", response_model=TopicSearchResponse)
+async def search_references(req: TopicSearchRequest):
+    """
+    Directly searches literature recommendations across 10 scholarly registries.
+    Supports filtering by seminal papers (high citations), recent advances (2022+), or open-access.
+    """
+    try:
+        response = await search_reference_recommendations(
+            query=req.query,
+            filter_mode=req.filter_mode or "general",
+            limit=req.limit or 8
+        )
+        return response
+    except Exception as e:
+        logger.error(f"Topic search failed: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Literature search failed: {str(e)}"
         )
 
 @router.post("/detect-citation-gaps", response_model=CitationGapsResponse)

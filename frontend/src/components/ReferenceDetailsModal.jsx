@@ -64,11 +64,38 @@ export default function ReferenceDetailsModal({ reference, onClose }) {
 
         {/* Retraction Alert Banner if flagged */}
         {reference.is_retracted && (
-          <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", padding: "0.75rem 1rem", backgroundColor: "#fef2f2", border: "1px solid #f87171", borderRadius: "6px", color: "#991b1b", marginBottom: "1.25rem" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", padding: "0.75rem 1rem", backgroundColor: "#fef2f2", border: "1px solid #f87171", borderRadius: "6px", color: "#991b1b", marginBottom: "1rem" }}>
             <ShieldAlert size={20} style={{ flexShrink: 0 }} />
             <div style={{ fontSize: "0.8125rem" }}>
               <strong>RETRACTION NOTICE:</strong> This publication is listed as retracted or withdrawn in academic registries. Citing retracted findings compromises research validity.
             </div>
+          </div>
+        )}
+
+        {/* Hallucination Risk Advisory */}
+        {reference.hallucination_risk && reference.hallucination_risk !== "LOW" && (
+          <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", padding: "0.75rem 1rem", backgroundColor: reference.hallucination_risk === "HIGH" ? "#fff1f2" : "#fffbeb", border: `1px solid ${reference.hallucination_risk === "HIGH" ? "#fda4af" : "#fcd34d"}`, borderRadius: "6px", color: reference.hallucination_risk === "HIGH" ? "#9f1239" : "#92400e", marginBottom: "1rem" }}>
+            <AlertTriangle size={18} style={{ flexShrink: 0 }} />
+            <div style={{ fontSize: "0.8125rem" }}>
+              <strong>{reference.hallucination_risk === "HIGH" ? "HIGH HALLUCINATION / PHANTOM RISK:" : "METADATA DISCREPANCY RISK:"}</strong> {reference.hallucination_reason || "Potential AI-fabricated citation or malformed entry."}
+            </div>
+          </div>
+        )}
+
+        {/* Journal Accreditation & Peer-Review Status */}
+        {reference.indexing_sources && reference.indexing_sources.length > 0 && (
+          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap", marginBottom: "1.25rem", padding: "0.5rem 0.75rem", backgroundColor: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "6px" }}>
+            <span style={{ fontSize: "0.7rem", fontWeight: 700, color: "#475569", textTransform: "uppercase" }}>Indexed In:</span>
+            {reference.indexing_sources.map((src, i) => (
+              <span key={i} style={{ fontSize: "0.7rem", backgroundColor: "#ffffff", border: "1px solid #cbd5e1", padding: "0.15rem 0.45rem", borderRadius: "4px", color: "#1e293b", fontWeight: 500 }}>
+                {src}
+              </span>
+            ))}
+            {reference.is_peer_reviewed_indexed && (
+              <span style={{ fontSize: "0.7rem", backgroundColor: "#ecfdf5", border: "1px solid #a7f3d0", color: "#065f46", padding: "0.15rem 0.45rem", borderRadius: "4px", fontWeight: 700, marginLeft: "auto" }}>
+                ✓ Peer-Reviewed Index Confirmed
+              </span>
+            )}
           </div>
         )}
 

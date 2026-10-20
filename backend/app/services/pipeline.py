@@ -19,7 +19,7 @@ from backend.app.pdf.section_detector import detect_reference_section
 from backend.app.citations.reference_parser import parse_all_references
 from backend.app.citations.inline_parser import extract_in_text_citations_from_pages
 from backend.app.citations.mapper import map_citations_to_references
-from backend.app.metadata.verifier import verify_reference
+from backend.app.metadata.verifier import verify_reference, build_repaired_citation
 from backend.app.scoring.metadata_score import calculate_metadata_score
 from backend.app.scoring.citation_score import calculate_overall_citation_score
 from backend.app.nlp.embeddings import generate_embeddings
@@ -92,12 +92,72 @@ async def run_verification_pipeline(
         if is_retracted:
             review_flags.append("RETRACTION WARNING: This cited work is flagged as retracted or subject to concern in academic registries.")
 
-        if verif_res.status == "metadata_mismatch":
+        # Hallucination risk calculation
+        hallucination_risk = "LOW"
+        hallucination_reason = None
+        if verif_res.status == "unverified":
+            if verif_res.author_match == 0.0 and verif_res.title_similarity < 0.45:
+                hallucination_risk = "HIGH"
+                hallucination_reason = "Unfound across 10 academic registries with no matching author or title. High probability of AI hallucination or fictitious reference."
+                review_flags.append("HIGH HALLUCINATION RISK: Reference absent from Crossref, S2, OpenAlex, arXiv, PubMed, DBLP, DataCite, DOAJ, HAL.")
+            else:
+                hallucination_risk = "MODERATE"
+                hallucination_reason = "No confirmed registry match, though partial title/author tokens were found."
+                review_flags.append("No verified scholarly record found. Potentially obscure or malformed.")
+        elif verif_res.status == "metadata_mismatch":
+            hallucination_risk = "MODERATE"
+            hallucination_reason = "Metadata discrepancy detected between citation and canonical record."
             review_flags.append("Metadata discrepancy detected between citation and scholarly record.")
-        elif verif_res.status == "unverified":
-            review_flags.append("No verified scholarly record found. Potentially hallucinated, obscure, or malformed.")
         elif verif_res.status == "api_unavailable":
+            hallucination_risk = "MODERATE"
+            hallucination_reason = "External verification APIs were unreachable."
             review_flags.append("External verification APIs were unreachable.")
+        else:
+            hallucination_risk = "LOW"
+            hallucination_reason = "Confirmed in scholarly registry with high bibliographic consistency."
+
+        # Journal Accreditation & Indexing
+        indexing_sources = []
+        if ext_rec and ext_rec.sources_verified:
+            source_map = {
+                "pubmed": "PubMed / MEDLINE",
+                "doaj": "DOAJ (Open Access Peer-Reviewed)",
+                "dblp": "DBLP (Computer Science)",
+                "crossref": "Crossref",
+                "openalex": "OpenAlex",
+                "arxiv": "arXiv Preprints",
+                "europe_pmc": "Europe PMC",
+                "datacite": "DataCite",
+                "hal": "HAL Open Science",
+                "semantic_scholar": "Semantic Scholar"
+            }
+            for src in ext_rec.sources_verified:
+                label = source_map.get(src, src)
+                if label not in indexing_sources:
+                    indexing_sources.append(label)
+
+        is_peer_reviewed_indexed = any(
+            s in indexing_sources
+            for s in [
+                "PubMed / MEDLINE",
+                "DOAJ (Open Access Peer-Reviewed)",
+                "DBLP (Computer Science)",
+                "Crossref",
+                "Europe PMC"
+            ]
+        )
+
+        # Repaired canonical citation
+        if ext_rec:
+            repaired_citation = build_repaired_citation(
+                authors=ext_rec.authors,
+                year=ext_rec.year,
+                title=ext_rec.title,
+                venue=ext_rec.venue,
+                doi=ext_rec.doi
+            )
+        else:
+            repaired_citation = ref.raw_text
 
         item = ReferenceItem(
             reference_id=ref.reference_id,
@@ -109,7 +169,12 @@ async def run_verification_pipeline(
             citation_occurrences=mapped_citations.get(ref.reference_id, []),
             score_breakdown=meta_breakdown,
             review_flags=review_flags,
-            is_retracted=is_retracted
+            is_retracted=is_retracted,
+            hallucination_risk=hallucination_risk,
+            hallucination_reason=hallucination_reason,
+            repaired_citation=repaired_citation,
+            is_peer_reviewed_indexed=is_peer_reviewed_indexed,
+            indexing_sources=indexing_sources
         )
         verified_items.append(item)
 
@@ -278,6 +343,8 @@ async def run_verification_pipeline(
     c_unavail = sum(1 for o in all_occs if o.classification == "unavailable")
     overclaim_cnt = sum(1 for o in all_occs if o.overclaim_flag)
     retracted_cnt = sum(1 for it in verified_items if it.is_retracted)
+    hallucination_cnt = sum(1 for it in verified_items if it.hallucination_risk == "HIGH")
+    peer_reviewed_cnt = sum(1 for it in verified_items if it.is_peer_reviewed_indexed)
     
     scored_items = [it.overall_score for it in verified_items if it.overall_score is not None]
     avg_score = round(sum(scored_items) / max(1, len(scored_items)), 1) if scored_items else 0.0
@@ -289,7 +356,10 @@ async def run_verification_pipeline(
         for src in it.external.sources_verified
     )))
     if not all_sources:
-        all_sources = ["crossref", "semantic_scholar", "openalex", "arxiv", "europe_pmc", "dblp", "datacite"]
+        all_sources = [
+            "crossref", "semantic_scholar", "openalex", "arxiv", "europe_pmc",
+            "dblp", "datacite", "pubmed", "doaj", "hal"
+        ]
 
     summary = AnalysisSummary(
         references_detected=total_refs,
@@ -306,6 +376,8 @@ async def run_verification_pipeline(
         context_unavailable=c_unavail,
         overclaim_flags=overclaim_cnt,
         retracted_citations_count=retracted_cnt,
+        hallucination_risk_count=hallucination_cnt,
+        peer_reviewed_count=peer_reviewed_cnt,
         average_integrity_score=avg_score,
         sources_queried=all_sources,
         graph_nodes_count=len(graph_nodes),
@@ -331,7 +403,10 @@ async def run_verification_pipeline(
             "arXiv Preprints API",
             "Europe PMC Life Sciences API",
             "DBLP Computer Science Bibliography API",
-            "DataCite Global Registry API"
+            "DataCite Global Registry API",
+            "PubMed / NCBI MEDLINE API",
+            "DOAJ Directory of Open Access Journals API",
+            "HAL Open Science Archives API"
         ],
         "similarity_thresholds": {
             "strongly_related": ">= 0.78",
@@ -341,6 +416,7 @@ async def run_verification_pipeline(
         },
         "score_weighting": "55% Metadata Verification, 45% Context Semantic Relevance",
         "overclaim_heuristic": "Assertion vocabulary matched with abstract semantic support",
+        "hallucination_classifier": "Zero-match anomaly detection across 10 scholarly indices",
     }
 
     result = AnalysisResult(

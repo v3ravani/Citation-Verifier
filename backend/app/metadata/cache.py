@@ -3,7 +3,7 @@ import hashlib
 import time
 from pathlib import Path
 from typing import Optional, Dict, Any
-from backend.app.core.paths import CROSSREF_CACHE_DIR, SEMANTIC_SCHOLAR_CACHE_DIR
+from backend.app.core.paths import CACHE_DIR, CROSSREF_CACHE_DIR, SEMANTIC_SCHOLAR_CACHE_DIR
 from backend.app.core.config import settings
 from backend.app.core.logging_config import logger
 

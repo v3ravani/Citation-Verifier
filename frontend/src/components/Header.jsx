@@ -13,9 +13,12 @@ export default function Header({ onNavigate, activeView, onOpenMethodology }) {
             <span className="brand-title">Citation Verifier</span>
           </div>
           <span className="brand-badge">Institutional Edition</span>
-          <span style={{ fontSize: "0.7rem", backgroundColor: "#ecfdf5", color: "#065f46", border: "1px solid #a7f3d0", padding: "0.15rem 0.5rem", borderRadius: "12px", display: "inline-flex", alignItems: "center", gap: "0.3rem", fontWeight: 600 }}>
+          <span
+            style={{ fontSize: "0.7rem", backgroundColor: "#ecfdf5", color: "#065f46", border: "1px solid #a7f3d0", padding: "0.15rem 0.5rem", borderRadius: "12px", display: "inline-flex", alignItems: "center", gap: "0.3rem", fontWeight: 600, cursor: "help" }}
+            title="10 Active Authoritative Registries: Crossref, Semantic Scholar, OpenAlex, arXiv, Europe PMC, DBLP, DataCite, PubMed/MEDLINE, DOAJ, and HAL Open Science"
+          >
             <span style={{ width: "6px", height: "6px", borderRadius: "50%", backgroundColor: "#10b981", display: "inline-block" }} />
-            7 Indices Active
+            10 Indices Active
           </span>
         </div>
 

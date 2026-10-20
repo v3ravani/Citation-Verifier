@@ -89,6 +89,11 @@ class ReferenceItem(BaseModel):
     score_breakdown: Dict[str, float] = Field(default_factory=dict)
     review_flags: List[str] = Field(default_factory=list)
     is_retracted: bool = False
+    hallucination_risk: str = "LOW"  # LOW, MODERATE, HIGH
+    hallucination_reason: Optional[str] = None
+    repaired_citation: Optional[str] = None
+    is_peer_reviewed_indexed: bool = False
+    indexing_sources: List[str] = Field(default_factory=list)
 
 class AnalysisSummary(BaseModel):
     references_detected: int = 0
@@ -105,6 +110,8 @@ class AnalysisSummary(BaseModel):
     context_unavailable: int = 0
     overclaim_flags: int = 0
     retracted_citations_count: int = 0
+    hallucination_risk_count: int = 0
+    peer_reviewed_count: int = 0
     average_integrity_score: float = 0.0
     sources_queried: List[str] = Field(default_factory=list)
     graph_nodes_count: int = 0

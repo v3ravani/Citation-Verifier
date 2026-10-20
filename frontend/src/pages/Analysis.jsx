@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Download, RefreshCw, FileText, Share2, ArrowLeft, Calendar, FileCheck, Hash, Sparkles, ShieldAlert, Clock, FileSpreadsheet, Code2 } from "lucide-react";
+import { Download, RefreshCw, FileText, Share2, ArrowLeft, Calendar, FileCheck, Hash, Sparkles, ShieldAlert, Clock, FileSpreadsheet, Code2, ShieldCheck, Award } from "lucide-react";
 import SummaryCards from "../components/SummaryCards";
 import ReferenceTable from "../components/ReferenceTable";
 import ReferenceDetailsModal from "../components/ReferenceDetailsModal";
@@ -7,6 +7,7 @@ import CitationGraph3D from "../components/CitationGraph3D";
 import CitationSuggester from "../components/CitationSuggester";
 import CitationGapFinder from "../components/CitationGapFinder";
 import CitationTimeline from "../components/CitationTimeline";
+import ExecutiveReportView from "../components/ExecutiveReportView";
 import {
   getTxtExportUrl,
   getJsonExportUrl,
@@ -14,6 +15,7 @@ import {
   getBibtexExportUrl,
   getCsvExportUrl,
   getMarkdownExportUrl,
+  getHtmlExportUrl,
   analyzePaperById
 } from "../api/client";
 
@@ -112,6 +114,18 @@ export default function Analysis({ result, onBack, onUpdateResult }) {
             <Download size={13} />
             <span>Annotated PDF</span>
             <span style={{ fontSize: "0.65rem", backgroundColor: "rgba(255,255,255,0.25)", padding: "0.1rem 0.35rem", borderRadius: "10px", fontWeight: 700 }}>Flags & Notes</span>
+          </a>
+
+          <a
+            href={getHtmlExportUrl(paper.id)}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="btn-secondary"
+            style={{ textDecoration: "none" }}
+            title="Open printable standalone executive HTML audit dossier"
+          >
+            <ShieldCheck size={13} />
+            <span>HTML Dossier</span>
           </a>
 
           <a
@@ -253,7 +267,22 @@ export default function Analysis({ result, onBack, onUpdateResult }) {
           }}
         >
           <Sparkles size={15} />
-          <span>Paragraph Citation Suggester</span>
+          <span>Reference Discovery Studio</span>
+        </button>
+
+        <button
+          type="button"
+          className={`btn-secondary ${activeTab === "report" ? "active" : ""}`}
+          onClick={() => setActiveTab("report")}
+          style={{
+            backgroundColor: activeTab === "report" ? "var(--accent-light)" : "var(--bg-primary)",
+            borderColor: activeTab === "report" ? "var(--accent-primary)" : "var(--border-subtle)",
+            color: activeTab === "report" ? "var(--accent-primary)" : "var(--text-secondary)",
+            fontWeight: activeTab === "report" ? 600 : 500,
+          }}
+        >
+          <Award size={15} />
+          <span>Executive Audit Report</span>
         </button>
       </div>
 
@@ -277,8 +306,13 @@ export default function Analysis({ result, onBack, onUpdateResult }) {
           references={references}
           onSelectYear={handleSelectYearFromTimeline}
         />
-      ) : (
+      ) : activeTab === "suggester" ? (
         <CitationSuggester />
+      ) : (
+        <ExecutiveReportView
+          result={result}
+          onSelectReference={setSelectedReference}
+        />
       )}
 
       {/* Reference Details Modal Drawer */}

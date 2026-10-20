@@ -15,6 +15,8 @@ export default function ReferenceTable({ references, onSelectReference, activeFi
       if (activeFilter === "unverified" && ref.verification.status !== "unverified") return false;
       if (activeFilter === "overclaim" && (!ref.citation_occurrences || !ref.citation_occurrences.some((c) => c.overclaim_flag))) return false;
       if (activeFilter === "retracted" && !ref.is_retracted) return false;
+      if (activeFilter === "hallucination" && ref.hallucination_risk !== "HIGH") return false;
+      if (activeFilter === "peer_reviewed" && !ref.is_peer_reviewed_indexed) return false;
 
       // 2. Search Query
       if (searchQuery.trim()) {
@@ -96,8 +98,10 @@ export default function ReferenceTable({ references, onSelectReference, activeFi
               <option value="all">All References ({references.length})</option>
               <option value="verified_exact">Verified Exact Only</option>
               <option value="verified_probable">Probable Matches Only</option>
+              <option value="peer_reviewed">Peer-Reviewed Only</option>
               <option value="metadata_mismatch">Metadata Mismatches Only</option>
               <option value="retracted">Retracted Citations Only</option>
+              <option value="hallucination">High Hallucination Risk Only</option>
               <option value="unverified">Unverified Only</option>
               <option value="overclaim">Flagged Contexts Only</option>
             </select>
@@ -179,6 +183,16 @@ export default function ReferenceTable({ references, onSelectReference, activeFi
                         {ref.is_retracted && (
                           <span style={{ fontSize: "0.65rem", fontWeight: 700, backgroundColor: "#fef2f2", color: "#b91c1c", border: "1px solid #fca5a5", padding: "0.1rem 0.4rem", borderRadius: "4px", textTransform: "uppercase" }}>
                             ⚠️ Retracted Work
+                          </span>
+                        )}
+                        {ref.hallucination_risk === "HIGH" && (
+                          <span style={{ fontSize: "0.65rem", fontWeight: 700, backgroundColor: "#fff1f2", color: "#e11d48", border: "1px solid #fda4af", padding: "0.1rem 0.4rem", borderRadius: "4px" }}>
+                            👻 Phantom / Hallucination Risk
+                          </span>
+                        )}
+                        {ref.is_peer_reviewed_indexed && (
+                          <span style={{ fontSize: "0.65rem", fontWeight: 600, backgroundColor: "#ecfdf5", color: "#065f46", border: "1px solid #a7f3d0", padding: "0.1rem 0.4rem", borderRadius: "4px" }}>
+                            ✓ Peer-Reviewed
                           </span>
                         )}
                       </div>

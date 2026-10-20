@@ -4,7 +4,7 @@ from fastapi.responses import FileResponse, PlainTextResponse
 from backend.app.core.paths import RESULTS_DIR, CROSSREF_CACHE_DIR, SEMANTIC_SCHOLAR_CACHE_DIR, UPLOADS_DIR
 from backend.app.services.result_manager import get_analysis_result, sanitize_paper_id
 from backend.app.services.pdf_annotator import generate_annotated_pdf
-from backend.app.services.report_generator import generate_bibtex_export, generate_csv_export, generate_markdown_report
+from backend.app.services.report_generator import generate_bibtex_export, generate_csv_export, generate_markdown_report, generate_html_report
 from backend.app.models.schemas import AnalysisResult
 from backend.app.core.logging_config import logger
 
@@ -185,6 +185,27 @@ async def get_markdown_export(paper_id: str):
         content=md_str,
         media_type="text/markdown",
         headers={"Content-Disposition": f'attachment; filename="{clean_id}_executive_report.md"'}
+    )
+
+@router.get("/report/{paper_id}/html")
+async def get_html_report(paper_id: str):
+    """Generates and displays standalone print-ready HTML audit dossier."""
+    try:
+        clean_id = sanitize_paper_id(paper_id)
+    except ValueError:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid paper ID format.")
+
+    result_data = get_analysis_result(clean_id)
+    if not result_data:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"No result found for '{clean_id}'.")
+
+    result = AnalysisResult.model_validate(result_data)
+    html_str = generate_html_report(result)
+
+    return Response(
+        content=html_str,
+        media_type="text/html",
+        headers={"Content-Disposition": f'inline; filename="{clean_id}_dossier.html"'}
     )
 
 @router.get("/cache/status")

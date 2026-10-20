@@ -65,6 +65,10 @@ export function getMarkdownExportUrl(paperId) {
   return `${API_BASE_URL}/api/report/${paperId}/markdown`;
 }
 
+export function getHtmlExportUrl(paperId) {
+  return `${API_BASE_URL}/api/report/${paperId}/html`;
+}
+
 export async function suggestCitations(text, maxClaims = 3, maxPerClaim = 5) {
   const response = await fetch(`${API_BASE_URL}/api/suggest-citations`, {
     method: "POST",
@@ -110,6 +114,27 @@ export async function detectCitationGaps(paperId, text = null, maxGaps = 5) {
 export async function fetchCacheStatus() {
   const response = await fetch(`${API_BASE_URL}/api/cache/status`);
   if (!response.ok) return null;
+  return response.json();
+}
+
+export async function searchLiterature(query, filterMode = "general", limit = 8) {
+  const response = await fetch(`${API_BASE_URL}/api/search-references`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      query,
+      filter_mode: filterMode,
+      limit,
+    }),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.detail || `Literature search failed (HTTP ${response.status})`);
+  }
+
   return response.json();
 }
 

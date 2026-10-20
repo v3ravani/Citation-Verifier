@@ -1,6 +1,6 @@
 import React, { useState } from "react";
-import { Sparkles, Copy, Check, ExternalLink, BookOpen, Quote, AlertCircle, Search } from "lucide-react";
-import { suggestCitations } from "../api/client";
+import { Sparkles, Copy, Check, ExternalLink, BookOpen, Quote, AlertCircle, Search, Filter, ShieldCheck, Clock, Award } from "lucide-react";
+import { suggestCitations, searchLiterature } from "../api/client";
 
 const EXAMPLE_PARAGRAPHS = [
   {
@@ -8,7 +8,7 @@ const EXAMPLE_PARAGRAPHS = [
     text: "Deep neural networks powered by multi-head self-attention mechanisms have fundamentally transformed natural language processing. By capturing long-range dependencies across sequence tokens without recurrence, these models achieve unprecedented generalization on downstream language understanding benchmarks.",
   },
   {
-    title: "Climate Change Economics",
+    title: "Climate Change Adaptation",
     text: "Climate change adaptation requires targeted finance mechanisms to protect vulnerable coastal communities against rising sea levels and extreme weather events. Developing nations face significant funding deficits in implementing robust localized resilience strategies.",
   },
   {
@@ -18,14 +18,18 @@ const EXAMPLE_PARAGRAPHS = [
 ];
 
 export default function CitationSuggester() {
+  const [activeMode, setActiveMode] = useState("paragraph"); // "paragraph" or "topic"
   const [inputText, setInputText] = useState("");
+  const [topicQuery, setTopicQuery] = useState("");
+  const [filterMode, setFilterMode] = useState("general"); // "general", "seminal", "recent", "open_access"
   const [isLoading, setIsLoading] = useState(false);
-  const [results, setResults] = useState(null);
+  const [paragraphResults, setParagraphResults] = useState(null);
+  const [topicResults, setTopicResults] = useState(null);
   const [error, setError] = useState(null);
-  const [copiedFormat, setCopiedFormat] = useState({}); // { `${claimIdx}-${candIdx}-${format}`: true }
-  const [activeFormat, setActiveFormat] = useState("ieee"); // "ieee", "apa", "bibtex"
+  const [copiedFormat, setCopiedFormat] = useState({});
+  const [activeFormat, setActiveFormat] = useState("ieee"); // "ieee", "apa", "mla", "chicago", "bibtex"
 
-  const handleAnalyze = async () => {
+  const handleAnalyzeParagraph = async () => {
     if (!inputText || inputText.trim().length < 15) {
       setError("Please enter a paragraph of at least 15 characters to analyze.");
       return;
@@ -34,10 +38,28 @@ export default function CitationSuggester() {
     setIsLoading(true);
     setError(null);
     try {
-      const data = await suggestCitations(inputText, 3, 4);
-      setResults(data);
+      const data = await suggestCitations(inputText, 3, 5);
+      setParagraphResults(data);
     } catch (err) {
       setError(err.message || "Failed to find citation suggestions.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleSearchTopic = async () => {
+    if (!topicQuery || topicQuery.trim().length < 3) {
+      setError("Please enter a topic or research question (at least 3 characters).");
+      return;
+    }
+
+    setIsLoading(true);
+    setError(null);
+    try {
+      const data = await searchLiterature(topicQuery, filterMode, 8);
+      setTopicResults(data);
+    } catch (err) {
+      setError(err.message || "Failed to search literature.");
     } finally {
       setIsLoading(false);
     }
@@ -64,250 +86,393 @@ export default function CitationSuggester() {
     }
   };
 
-  return (
-    <div style={{ maxWidth: "100%" }}>
-      {/* Introduction Card */}
-      <div className="academic-card" style={{ padding: "1.25rem", marginBottom: "1.25rem" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.5rem" }}>
-          <Sparkles size={18} style={{ color: "var(--accent-primary)" }} />
-          <h3 style={{ fontSize: "1rem", fontWeight: 700, margin: 0, color: "var(--text-primary)" }}>
-            Paragraph Citation Suggester & Claim Assistant
-          </h3>
-        </div>
-        <p style={{ fontSize: "0.8125rem", color: "var(--text-secondary)", margin: 0, lineHeight: 1.5 }}>
-          Draft or paste any paragraph of your research paper. The verifier will extract your core claims, search peer-reviewed scholarly records across <strong>OpenAlex</strong>, <strong>Semantic Scholar</strong>, and <strong>arXiv</strong>, rank candidates with local <strong>Sentence-BERT</strong> embeddings, and generate verified citations in <strong>IEEE</strong>, <strong>APA</strong>, and <strong>BibTeX</strong> formats.
-        </p>
+  const renderCitationCard = (cand, candIdx, keyPrefix) => {
+    const badgeStyle = getBadgeColor(cand.relevance_badge);
+    const formattedText =
+      activeFormat === "apa"
+        ? cand.apa
+        : activeFormat === "mla"
+        ? cand.mla || cand.apa
+        : activeFormat === "chicago"
+        ? cand.chicago || cand.apa
+        : activeFormat === "bibtex"
+        ? cand.bibtex
+        : cand.ieee;
 
-        {/* Quick Example Templates */}
-        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginTop: "0.75rem", flexWrap: "wrap" }}>
-          <span style={{ fontSize: "0.75rem", fontWeight: 600, color: "var(--text-muted)" }}>Example Claims:</span>
-          {EXAMPLE_PARAGRAPHS.map((ex) => (
-            <button
-              key={ex.title}
-              type="button"
-              className="btn-secondary btn-sm"
-              onClick={() => {
-                setInputText(ex.text);
-                setError(null);
-              }}
-              style={{ fontSize: "0.75rem", padding: "0.2rem 0.6rem" }}
-            >
-              {ex.title}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Input Textarea Area */}
-      <div className="academic-card" style={{ padding: "1.25rem", marginBottom: "1.5rem" }}>
-        <label htmlFor="paragraph-input" style={{ display: "block", fontSize: "0.8125rem", fontWeight: 600, color: "var(--text-primary)", marginBottom: "0.5rem" }}>
-          Research Draft Paragraph or Statement:
-        </label>
-        <textarea
-          id="paragraph-input"
-          value={inputText}
-          onChange={(e) => setInputText(e.target.value)}
-          placeholder="Paste or type a research paragraph, methodology claim, or literature review argument..."
-          rows={5}
-          style={{
-            width: "100%",
-            padding: "0.75rem",
-            fontSize: "0.875rem",
-            fontFamily: "inherit",
-            lineHeight: 1.5,
-            border: "1px solid var(--border-subtle)",
-            borderRadius: "6px",
-            backgroundColor: "#FFFFFF",
-            color: "var(--text-primary)",
-            resize: "vertical",
-            outline: "none",
-            marginBottom: "0.75rem",
-          }}
-        />
-
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "0.5rem" }}>
-          <div style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>
-            {inputText.length} characters • Analyzed with zero hallucination guarantee
+    return (
+      <div
+        key={candIdx}
+        style={{
+          border: "1px solid var(--border-subtle)",
+          borderRadius: "6px",
+          padding: "1rem",
+          backgroundColor: "var(--bg-primary)",
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "1rem", marginBottom: "0.5rem" }}>
+          <div>
+            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap", marginBottom: "0.25rem" }}>
+              <span
+                style={{
+                  fontSize: "0.6875rem",
+                  fontWeight: 700,
+                  backgroundColor: badgeStyle.bg,
+                  color: badgeStyle.text,
+                  border: `1px solid ${badgeStyle.border}`,
+                  padding: "0.125rem 0.45rem",
+                  borderRadius: "12px",
+                }}
+              >
+                {cand.relevance_badge} ({(cand.semantic_similarity * 100).toFixed(0)}%)
+              </span>
+              <span style={{ fontSize: "0.6875rem", backgroundColor: "var(--bg-secondary)", color: "var(--text-muted)", padding: "0.125rem 0.35rem", borderRadius: "3px" }}>
+                Source: {cand.source}
+              </span>
+              {cand.citation_count !== null && cand.citation_count !== undefined && (
+                <span style={{ fontSize: "0.6875rem", color: "var(--accent-primary)", fontWeight: 600 }}>
+                  ★ {cand.citation_count} citations
+                </span>
+              )}
+            </div>
+            <h5 style={{ fontSize: "0.9375rem", fontWeight: 600, color: "var(--text-primary)", margin: 0, lineHeight: 1.35 }}>
+              {cand.title}
+            </h5>
           </div>
 
+          {cand.url && (
+            <a
+              href={cand.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                color: "var(--accent-primary)",
+                flexShrink: 0,
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "0.25rem",
+                fontSize: "0.75rem",
+                textDecoration: "none",
+              }}
+            >
+              <span>View</span>
+              <ExternalLink size={12} />
+            </a>
+          )}
+        </div>
+
+        <div style={{ fontSize: "0.75rem", color: "var(--text-secondary)", marginBottom: "0.75rem" }}>
+          <span>{cand.authors && cand.authors.length ? cand.authors.join(", ") : "Anonymous"}</span>
+          {cand.year && <span> ({cand.year})</span>}
+          {cand.venue && <span> • <em>{cand.venue}</em></span>}
+          {cand.doi && <span style={{ marginLeft: "0.5rem" }}>• DOI: <code>{cand.doi}</code></span>}
+        </div>
+
+        {cand.abstract && (
+          <p style={{ fontSize: "0.75rem", color: "var(--text-muted)", lineHeight: 1.45, marginBottom: "0.75rem", backgroundColor: "var(--bg-secondary)", padding: "0.5rem 0.75rem", borderRadius: "4px" }}>
+            {cand.abstract.length > 250 ? `${cand.abstract.slice(0, 250)}...` : cand.abstract}
+          </p>
+        )}
+
+        {/* Citation copy box */}
+        <div style={{ backgroundColor: "var(--bg-secondary)", border: "1px solid var(--border-subtle)", borderRadius: "4px", padding: "0.625rem 0.75rem", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.75rem" }}>
+          <code style={{ fontSize: "0.75rem", color: "var(--text-primary)", whiteSpace: "pre-wrap", wordBreak: "break-all", maxHeight: activeFormat === "bibtex" ? "120px" : "none", overflowY: "auto", display: "block", flex: 1 }}>
+            {formattedText}
+          </code>
           <button
             type="button"
-            className="btn-primary"
-            onClick={handleAnalyze}
-            disabled={isLoading || !inputText.trim()}
-            style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem" }}
+            className="btn-secondary btn-sm"
+            onClick={() => handleCopy(formattedText, `${keyPrefix}-${candIdx}`)}
+            style={{ flexShrink: 0 }}
           >
-            {isLoading ? (
+            {copiedFormat[`${keyPrefix}-${candIdx}`] ? (
               <>
-                <span className="spin" style={{ display: "inline-block", width: "14px", height: "14px", border: "2px solid #FFFFFF", borderTopColor: "transparent", borderRadius: "50%" }} />
-                <span>Searching Scholarly Indices...</span>
+                <Check size={12} style={{ color: "#16a34a" }} />
+                <span>Copied</span>
               </>
             ) : (
               <>
-                <Search size={15} />
-                <span>Find & Suggest Citations</span>
+                <Copy size={12} />
+                <span>Copy</span>
               </>
             )}
           </button>
         </div>
+      </div>
+    );
+  };
 
-        {error && (
-          <div style={{ marginTop: "0.75rem", padding: "0.5rem 0.75rem", backgroundColor: "#fef2f2", border: "1px solid #fecaca", borderRadius: "4px", color: "#991b1b", fontSize: "0.8125rem", display: "flex", alignItems: "center", gap: "0.4rem" }}>
-            <AlertCircle size={15} />
-            <span>{error}</span>
+  return (
+    <div style={{ maxWidth: "100%" }}>
+      {/* Introduction Card */}
+      <div className="academic-card" style={{ padding: "1.25rem", marginBottom: "1.25rem" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "0.75rem", marginBottom: "0.75rem" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+            <Sparkles size={18} style={{ color: "var(--accent-primary)" }} />
+            <h3 style={{ fontSize: "1.05rem", fontWeight: 700, margin: 0, color: "var(--text-primary)" }}>
+              Reference Recommendation & Discovery Studio
+            </h3>
           </div>
-        )}
+
+          <div style={{ display: "inline-flex", borderRadius: "6px", border: "1px solid var(--border-subtle)", overflow: "hidden" }}>
+            <button
+              type="button"
+              onClick={() => setActiveMode("paragraph")}
+              style={{
+                padding: "0.4rem 0.85rem",
+                fontSize: "0.8125rem",
+                fontWeight: activeMode === "paragraph" ? 600 : 500,
+                backgroundColor: activeMode === "paragraph" ? "var(--accent-light)" : "var(--bg-primary)",
+                color: activeMode === "paragraph" ? "var(--accent-primary)" : "var(--text-secondary)",
+                border: "none",
+                cursor: "pointer",
+              }}
+            >
+              Paragraph Claim Suggester
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveMode("topic")}
+              style={{
+                padding: "0.4rem 0.85rem",
+                fontSize: "0.8125rem",
+                fontWeight: activeMode === "topic" ? 600 : 500,
+                backgroundColor: activeMode === "topic" ? "var(--accent-light)" : "var(--bg-primary)",
+                color: activeMode === "topic" ? "var(--accent-primary)" : "var(--text-secondary)",
+                border: "none",
+                borderLeft: "1px solid var(--border-subtle)",
+                cursor: "pointer",
+              }}
+            >
+              Topic & Milestone Literature Search
+            </button>
+          </div>
+        </div>
+
+        <p style={{ fontSize: "0.8125rem", color: "var(--text-secondary)", margin: 0, lineHeight: 1.5 }}>
+          Search across <strong>10 authoritative scholarly registries</strong> (Crossref, Semantic Scholar, OpenAlex, arXiv, Europe PMC, DBLP, DataCite, PubMed/MEDLINE, DOAJ, and HAL Open Science). Candidate works are semantically ranked via local <strong>Sentence-BERT</strong> (all-MiniLM-L6-v2) embeddings with one-click export in <strong>IEEE, APA, MLA, Chicago, and BibTeX</strong>.
+        </p>
       </div>
 
-      {/* Results Section */}
-      {results && results.results && (
-        <div>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "1rem", flexWrap: "wrap", gap: "0.5rem" }}>
-            <h4 style={{ fontSize: "0.9375rem", fontWeight: 700, color: "var(--text-primary)", margin: 0 }}>
-              Scholarly Recommendations ({results.results.reduce((acc, c) => acc + c.suggestions.length, 0)} Verified Works Found)
-            </h4>
-
-            {/* Global Citation Format Switcher */}
-            <div style={{ display: "flex", alignItems: "center", gap: "0.25rem", backgroundColor: "var(--bg-secondary)", padding: "0.2rem", borderRadius: "6px", border: "1px solid var(--border-subtle)" }}>
-              <span style={{ fontSize: "0.75rem", fontWeight: 600, color: "var(--text-muted)", padding: "0 0.5rem" }}>Format:</span>
-              {["ieee", "apa", "bibtex"].map((fmt) => (
-                <button
-                  key={fmt}
-                  type="button"
-                  onClick={() => setActiveFormat(fmt)}
-                  style={{
-                    padding: "0.25rem 0.6rem",
-                    fontSize: "0.75rem",
-                    fontWeight: activeFormat === fmt ? 600 : 500,
-                    backgroundColor: activeFormat === fmt ? "#FFFFFF" : "transparent",
-                    color: activeFormat === fmt ? "var(--accent-primary)" : "var(--text-secondary)",
-                    border: activeFormat === fmt ? "1px solid var(--border-subtle)" : "1px solid transparent",
-                    borderRadius: "4px",
-                    cursor: "pointer",
-                    textTransform: "uppercase",
-                  }}
-                >
-                  {fmt}
-                </button>
-              ))}
-            </div>
+      {/* Mode 1: Paragraph Claim Suggester */}
+      {activeMode === "paragraph" ? (
+        <div className="academic-card" style={{ padding: "1.25rem", marginBottom: "1.5rem" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "0.5rem" }}>
+            <label style={{ fontSize: "0.8125rem", fontWeight: 600, color: "var(--text-primary)" }}>
+              Draft Research Text or Paragraph
+            </label>
+            <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>
+              {inputText.length} characters
+            </span>
           </div>
 
-          {results.results.map((claimRes, claimIdx) => (
+          <textarea
+            rows={4}
+            value={inputText}
+            onChange={(e) => setInputText(e.target.value)}
+            placeholder="Paste a paragraph from your paper to extract factual claims and discover matching literature..."
+            style={{
+              width: "100%",
+              padding: "0.75rem",
+              fontSize: "0.875rem",
+              borderRadius: "6px",
+              border: "1px solid var(--border-subtle)",
+              backgroundColor: "var(--bg-primary)",
+              color: "var(--text-primary)",
+              resize: "vertical",
+              marginBottom: "0.75rem",
+            }}
+          />
+
+          {/* Example Prompts */}
+          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap", marginBottom: "1rem" }}>
+            <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>Load Sample:</span>
+            {EXAMPLE_PARAGRAPHS.map((ex, i) => (
+              <button
+                key={i}
+                type="button"
+                className="btn-secondary btn-sm"
+                onClick={() => setInputText(ex.text)}
+                style={{ fontSize: "0.75rem" }}
+              >
+                {ex.title}
+              </button>
+            ))}
+          </div>
+
+          {error && (
+            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", padding: "0.75rem", backgroundColor: "#fef2f2", border: "1px solid #fca5a5", borderRadius: "6px", color: "#991b1b", fontSize: "0.8125rem", marginBottom: "1rem" }}>
+              <AlertCircle size={16} />
+              <span>{error}</span>
+            </div>
+          )}
+
+          <div style={{ display: "flex", justifyContent: "flex-end" }}>
+            <button
+              type="button"
+              className="btn-primary"
+              onClick={handleAnalyzeParagraph}
+              disabled={isLoading || inputText.trim().length < 15}
+            >
+              <Sparkles size={14} className={isLoading ? "spin" : ""} />
+              <span>{isLoading ? "Searching 10 Registries & Embedding..." : "Find Supporting Citations"}</span>
+            </button>
+          </div>
+        </div>
+      ) : (
+        /* Mode 2: Topic & Literature Explorer */
+        <div className="academic-card" style={{ padding: "1.25rem", marginBottom: "1.5rem" }}>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "0.75rem", alignItems: "center", marginBottom: "1rem" }}>
+            <div style={{ position: "relative", flex: "1 1 320px" }}>
+              <Search size={16} style={{ position: "absolute", left: "0.75rem", top: "50%", transform: "translateY(-50%)", color: "var(--text-muted)" }} />
+              <input
+                type="text"
+                placeholder="Search topic or question (e.g. 'self-supervised visual representation learning', 'CRISPR off-target detection')..."
+                value={topicQuery}
+                onChange={(e) => setTopicQuery(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleSearchTopic()}
+                style={{
+                  width: "100%",
+                  padding: "0.6rem 0.75rem 0.6rem 2.25rem",
+                  fontSize: "0.875rem",
+                  borderRadius: "6px",
+                  border: "1px solid var(--border-subtle)",
+                  backgroundColor: "var(--bg-primary)",
+                  color: "var(--text-primary)",
+                }}
+              />
+            </div>
+
+            {/* Filter Mode Selector */}
+            <div style={{ display: "flex", alignItems: "center", gap: "0.35rem" }}>
+              <Filter size={14} style={{ color: "var(--text-muted)" }} />
+              <select
+                value={filterMode}
+                onChange={(e) => setFilterMode(e.target.value)}
+                style={{
+                  padding: "0.55rem 0.75rem",
+                  fontSize: "0.8125rem",
+                  borderRadius: "6px",
+                  border: "1px solid var(--border-subtle)",
+                  backgroundColor: "var(--bg-primary)",
+                  color: "var(--text-primary)",
+                  cursor: "pointer",
+                }}
+              >
+                <option value="general">Relevance Composite</option>
+                <option value="seminal">★ Seminal / Highly Cited</option>
+                <option value="recent">⚡ Recent Advances (2022-2026)</option>
+                <option value="open_access">🔓 Verified Open Access</option>
+              </select>
+            </div>
+
+            <button
+              type="button"
+              className="btn-primary"
+              onClick={handleSearchTopic}
+              disabled={isLoading || topicQuery.trim().length < 3}
+            >
+              <Search size={14} className={isLoading ? "spin" : ""} />
+              <span>{isLoading ? "Searching..." : "Explore Literature"}</span>
+            </button>
+          </div>
+
+          {error && (
+            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", padding: "0.75rem", backgroundColor: "#fef2f2", border: "1px solid #fca5a5", borderRadius: "6px", color: "#991b1b", fontSize: "0.8125rem" }}>
+              <AlertCircle size={16} />
+              <span>{error}</span>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Format Selector Bar */}
+      {(paragraphResults || topicResults) && (
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "0.75rem", marginBottom: "1.25rem", paddingBottom: "0.75rem", borderBottom: "1px solid var(--border-subtle)" }}>
+          <div style={{ fontSize: "0.8125rem", fontWeight: 600, color: "var(--text-primary)" }}>
+            Select Citation Output Standard:
+          </div>
+          <div style={{ display: "inline-flex", borderRadius: "6px", border: "1px solid var(--border-subtle)", overflow: "hidden" }}>
+            {["ieee", "apa", "mla", "chicago", "bibtex"].map((fmt) => (
+              <button
+                key={fmt}
+                type="button"
+                onClick={() => setActiveFormat(fmt)}
+                style={{
+                  padding: "0.3rem 0.75rem",
+                  fontSize: "0.75rem",
+                  fontWeight: activeFormat === fmt ? 700 : 500,
+                  backgroundColor: activeFormat === fmt ? "var(--accent-primary)" : "var(--bg-primary)",
+                  color: activeFormat === fmt ? "#ffffff" : "var(--text-secondary)",
+                  border: "none",
+                  borderLeft: fmt !== "ieee" ? "1px solid var(--border-subtle)" : "none",
+                  cursor: "pointer",
+                  textTransform: "uppercase",
+                }}
+              >
+                {fmt}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Results View for Mode 1: Paragraph Claims */}
+      {activeMode === "paragraph" && paragraphResults && (
+        <div>
+          {paragraphResults.results.map((item, claimIdx) => (
             <div key={claimIdx} className="academic-card" style={{ padding: "1.25rem", marginBottom: "1.25rem" }}>
-              {/* Claim Box */}
-              <div style={{ padding: "0.6rem 0.75rem", backgroundColor: "var(--bg-secondary)", borderLeft: "3px solid var(--accent-primary)", borderRadius: "0 4px 4px 0", marginBottom: "1rem" }}>
-                <div style={{ fontSize: "0.7rem", fontWeight: 700, color: "var(--accent-primary)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "0.2rem" }}>
-                  Analyzed Claim #{claimIdx + 1}
-                </div>
-                <div style={{ fontSize: "0.875rem", color: "var(--text-primary)", fontStyle: "italic" }}>
-                  "{claimRes.claim}"
-                </div>
+              <div style={{ marginBottom: "1rem", borderLeft: "3px solid var(--accent-primary)", paddingLeft: "0.75rem" }}>
+                <span style={{ fontSize: "0.7rem", fontWeight: 700, color: "var(--accent-primary)", textTransform: "uppercase", letterSpacing: "0.03em" }}>
+                  Extracted Assertive Claim #{claimIdx + 1}:
+                </span>
+                <p style={{ fontSize: "0.9375rem", fontWeight: 500, color: "var(--text-primary)", margin: "0.25rem 0 0 0", lineHeight: 1.45 }}>
+                  "{item.claim}"
+                </p>
               </div>
 
-              {/* Suggestions List */}
-              {claimRes.suggestions.length === 0 ? (
-                <div style={{ fontSize: "0.8125rem", color: "var(--text-muted)", textAlign: "center", padding: "1rem" }}>
-                  No high-confidence academic matches found for this specific phrasing. Try adjusting keywords.
-                </div>
+              <div style={{ fontSize: "0.8125rem", fontWeight: 600, color: "var(--text-secondary)", marginBottom: "0.75rem" }}>
+                Empirical Supporting Works ({item.suggestions.length}):
+              </div>
+
+              {item.suggestions.length === 0 ? (
+                <p style={{ fontSize: "0.8125rem", color: "var(--text-muted)", fontStyle: "italic", margin: 0 }}>
+                  No high-confidence publications matched this specific claim sentence.
+                </p>
               ) : (
-                <div style={{ display: "flex", flexDirection: "column", gap: "0.875rem" }}>
-                  {claimRes.suggestions.map((cand, candIdx) => {
-                    const badgeStyle = getBadgeColor(cand.relevance_badge);
-                    const copyKey = `${claimIdx}-${candIdx}-${activeFormat}`;
-                    const isCopied = copiedFormat[copyKey];
-                    const citationString = activeFormat === "ieee" ? cand.ieee : activeFormat === "apa" ? cand.apa : cand.bibtex;
-
-                    return (
-                      <div
-                        key={candIdx}
-                        style={{
-                          border: "1px solid var(--border-subtle)",
-                          borderRadius: "6px",
-                          padding: "0.875rem",
-                          backgroundColor: "#FFFFFF",
-                        }}
-                      >
-                        {/* Top Bar: Relevance Badge, Sim Score, Source */}
-                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "0.5rem", marginBottom: "0.4rem" }}>
-                          <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
-                            <span
-                              style={{
-                                fontSize: "0.7rem",
-                                fontWeight: 700,
-                                padding: "0.15rem 0.5rem",
-                                borderRadius: "12px",
-                                backgroundColor: badgeStyle.bg,
-                                border: `1px solid ${badgeStyle.border}`,
-                                color: badgeStyle.text,
-                              }}
-                            >
-                              {cand.relevance_badge}
-                            </span>
-                            <span style={{ fontSize: "0.75rem", color: "var(--text-secondary)", fontWeight: 600 }}>
-                              {(cand.semantic_similarity * 100).toFixed(0)}% Semantic Match
-                            </span>
-                          </div>
-
-                          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", fontSize: "0.75rem", color: "var(--text-muted)" }}>
-                            <span style={{ textTransform: "capitalize" }}>Source: {cand.source}</span>
-                            {cand.citation_count !== null && (
-                              <span>• {cand.citation_count} Citations</span>
-                            )}
-                          </div>
-                        </div>
-
-                        {/* Title */}
-                        <h5 style={{ fontSize: "0.9375rem", fontWeight: 600, color: "var(--text-primary)", margin: "0 0 0.35rem 0", lineHeight: 1.35 }}>
-                          {cand.url ? (
-                            <a href={cand.url} target="_blank" rel="noopener noreferrer" style={{ color: "var(--accent-primary)", textDecoration: "none", display: "inline-flex", alignItems: "baseline", gap: "0.25rem" }}>
-                              {cand.title}
-                              <ExternalLink size={12} />
-                            </a>
-                          ) : (
-                            cand.title
-                          )}
-                        </h5>
-
-                        {/* Authors & Venue */}
-                        <div style={{ fontSize: "0.75rem", color: "var(--text-secondary)", marginBottom: "0.5rem" }}>
-                          <span>{cand.authors && cand.authors.length > 0 ? cand.authors.join(", ") : "Unknown Authors"}</span>
-                          {cand.year && <span> ({cand.year})</span>}
-                          {cand.venue && <span> • <em>{cand.venue}</em></span>}
-                          {cand.doi && <span> • DOI: <code>{cand.doi}</code></span>}
-                        </div>
-
-                        {/* Abstract Snippet */}
-                        {cand.abstract && (
-                          <div style={{ fontSize: "0.75rem", color: "var(--text-muted)", lineHeight: 1.45, marginBottom: "0.75rem", display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
-                            {cand.abstract}
-                          </div>
-                        )}
-
-                        {/* Formatted Citation Output Box & Copy Button */}
-                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.5rem", backgroundColor: "var(--bg-secondary)", padding: "0.5rem 0.75rem", borderRadius: "4px", border: "1px solid var(--border-subtle)" }}>
-                          <div style={{ fontSize: "0.75rem", fontFamily: activeFormat === "bibtex" ? "monospace" : "inherit", color: "var(--text-primary)", overflowX: "auto", whiteSpace: activeFormat === "bibtex" ? "pre-wrap" : "normal" }}>
-                            {citationString}
-                          </div>
-
-                          <button
-                            type="button"
-                            className="btn-secondary btn-sm"
-                            onClick={() => handleCopy(citationString, copyKey)}
-                            style={{ flexShrink: 0, display: "inline-flex", alignItems: "center", gap: "0.3rem" }}
-                            title={`Copy ${activeFormat.toUpperCase()} citation`}
-                          >
-                            {isCopied ? <Check size={12} style={{ color: "#16a34a" }} /> : <Copy size={12} />}
-                            <span style={{ fontSize: "0.7rem" }}>{isCopied ? "Copied" : "Copy"}</span>
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  })}
+                <div style={{ display: "grid", gap: "0.75rem" }}>
+                  {item.suggestions.map((cand, candIdx) =>
+                    renderCitationCard(cand, candIdx, `p-${claimIdx}`)
+                  )}
                 </div>
               )}
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Results View for Mode 2: Topic Search */}
+      {activeMode === "topic" && topicResults && (
+        <div className="academic-card" style={{ padding: "1.25rem" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "1rem" }}>
+            <h4 style={{ fontSize: "0.9375rem", fontWeight: 600, color: "var(--text-primary)", margin: 0 }}>
+              Literature Recommendations for "{topicResults.query}" ({topicResults.total_found} works)
+            </h4>
+            <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>
+              Filter: <strong>{topicResults.filter_mode}</strong>
+            </span>
+          </div>
+
+          {topicResults.results.length === 0 ? (
+            <p style={{ fontSize: "0.8125rem", color: "var(--text-muted)", fontStyle: "italic" }}>
+              No publications found matching this query under the selected filter.
+            </p>
+          ) : (
+            <div style={{ display: "grid", gap: "0.75rem" }}>
+              {topicResults.results.map((cand, candIdx) =>
+                renderCitationCard(cand, candIdx, `t`)
+              )}
+            </div>
+          )}
         </div>
       )}
     </div>
