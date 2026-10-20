@@ -53,6 +53,18 @@ export function getAnnotatedPdfExportUrl(paperId) {
   return `${API_BASE_URL}/api/report/${paperId}/annotated-pdf`;
 }
 
+export function getBibtexExportUrl(paperId) {
+  return `${API_BASE_URL}/api/report/${paperId}/bibtex`;
+}
+
+export function getCsvExportUrl(paperId) {
+  return `${API_BASE_URL}/api/report/${paperId}/csv`;
+}
+
+export function getMarkdownExportUrl(paperId) {
+  return `${API_BASE_URL}/api/report/${paperId}/markdown`;
+}
+
 export async function suggestCitations(text, maxClaims = 3, maxPerClaim = 5) {
   const response = await fetch(`${API_BASE_URL}/api/suggest-citations`, {
     method: "POST",
@@ -69,6 +81,27 @@ export async function suggestCitations(text, maxClaims = 3, maxPerClaim = 5) {
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));
     throw new Error(errorData.detail || `Citation suggestion failed (HTTP ${response.status})`);
+  }
+
+  return response.json();
+}
+
+export async function detectCitationGaps(paperId, text = null, maxGaps = 5) {
+  const response = await fetch(`${API_BASE_URL}/api/detect-citation-gaps`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      paper_id: paperId,
+      text: text,
+      max_gaps: maxGaps,
+    }),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.detail || `Citation gap detection failed (HTTP ${response.status})`);
   }
 
   return response.json();

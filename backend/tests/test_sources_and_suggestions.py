@@ -2,12 +2,21 @@ import pytest
 import xml.etree.ElementTree as ET
 from backend.app.metadata.arxiv import extract_arxiv_id, parse_arxiv_entry, ATOM_NS
 from backend.app.metadata.openalex import reconstruct_openalex_abstract, parse_openalex_work
+from backend.app.metadata.europe_pmc import parse_europe_pmc_item
+from backend.app.metadata.dblp import parse_dblp_hit
+from backend.app.metadata.datacite import parse_datacite_work
 from backend.app.services.citation_suggester import (
     format_ieee,
     format_apa,
     format_bibtex,
     extract_search_terms,
     suggest_citations_for_paragraph,
+    detect_citation_gaps_in_text,
+)
+from backend.app.services.report_generator import (
+    generate_bibtex_export,
+    generate_csv_export,
+    generate_markdown_report,
 )
 from backend.app.services.pdf_annotator import generate_annotated_pdf
 from backend.app.models.schemas import AnalysisResult
@@ -82,6 +91,77 @@ def test_parse_openalex_work():
     assert parsed["citation_count"] == 55000
     assert "Deep learning allows" in parsed["abstract"]
 
+def test_parse_europe_pmc_item():
+    normal_item = {
+        "title": "CRISPR-Cas9 structures and mechanisms",
+        "authorString": "Doudna JA, Charpentier E",
+        "pubYear": "2014",
+        "journalTitle": "Science",
+        "doi": "10.1126/science.1258096",
+        "abstractText": "The RNA-guided Cas9 endonuclease uses RNA-DNA base pairing to target double-strand breaks.",
+        "citedByCount": 8500,
+        "isRetracted": "N"
+    }
+    parsed = parse_europe_pmc_item(normal_item)
+    assert parsed["title"] == "CRISPR-Cas9 structures and mechanisms"
+    assert parsed["year"] == 2014
+    assert len(parsed["authors"]) == 2
+    assert parsed["doi"] == "10.1126/science.1258096"
+    assert parsed["is_retracted"] is False
+
+    retracted_item = {
+        "title": "Retracted: Falsified clinical trial analysis",
+        "authorString": "Fraudster A",
+        "pubYear": "2020",
+        "isRetracted": "Y"
+    }
+    parsed_retracted = parse_europe_pmc_item(retracted_item)
+    assert parsed_retracted["is_retracted"] is True
+
+def test_parse_dblp_hit():
+    dblp_hit = {
+        "info": {
+            "title": "Deep Residual Learning for Image Recognition.",
+            "authors": {
+                "author": [
+                    {"text": "Kaiming He"},
+                    {"text": "Xiangyu Zhang"},
+                    {"text": "Shaoqing Ren"},
+                    {"text": "Jian Sun"}
+                ]
+            },
+            "year": "2016",
+            "venue": "CVPR",
+            "doi": "10.1109/CVPR.2016.90",
+            "ee": "https://doi.org/10.1109/CVPR.2016.90"
+        }
+    }
+    parsed = parse_dblp_hit(dblp_hit)
+    assert parsed["title"] == "Deep Residual Learning for Image Recognition"
+    assert parsed["year"] == 2016
+    assert len(parsed["authors"]) == 4
+    assert "Kaiming He" in parsed["authors"]
+    assert parsed["doi"] == "10.1109/cvpr.2016.90"
+    assert parsed["source"] == "dblp"
+
+def test_parse_datacite_work():
+    datacite_item = {
+        "attributes": {
+            "titles": [{"title": "ImageNet Large Scale Visual Recognition Challenge Dataset"}],
+            "creators": [{"name": "Olga Russakovsky"}, {"name": "Jia Deng"}],
+            "publicationYear": 2015,
+            "doi": "10.1007/s11263-015-0816-y",
+            "publisher": "Springer",
+            "descriptions": [{"description": "The ImageNet dataset evaluation benchmark."}]
+        }
+    }
+    parsed = parse_datacite_work(datacite_item)
+    assert "ImageNet Large Scale" in parsed["title"]
+    assert parsed["year"] == 2015
+    assert len(parsed["authors"]) == 2
+    assert parsed["doi"] == "10.1007/s11263-015-0816-y"
+    assert parsed["source"] == "datacite"
+
 def test_citation_formatters():
     authors = ["Ashish Vaswani", "Noam Shazeer", "Niki Parmar", "Jakob Uszkoreit"]
     title = "Attention is all you need"
@@ -118,9 +198,43 @@ async def test_citation_suggester_empty():
     assert res.claims_analyzed == 0
     assert len(res.results) == 0
 
+@pytest.mark.asyncio
+async def test_detect_citation_gaps_in_text():
+    sample_doc = """
+    In recent years, deep neural architectures have revolutionized computational vision.
+    Studies show that self-attention mechanisms significantly improve machine translation quality across benchmarks.
+    However, conventional convolutional networks [1] require extensive spatial convolutions.
+    """
+    gaps = await detect_citation_gaps_in_text(sample_doc, max_gaps=2)
+    assert gaps.total_gaps_detected >= 1
+    # Check that the detected gap is the uncited sentence
+    first_gap = gaps.gaps[0]
+    assert "self-attention" in first_gap.sentence or "computational vision" in first_gap.sentence
+    assert "[1]" not in first_gap.sentence
+
 def test_annotated_pdf_generation_content():
     loaded = get_analysis_result("eb774d3c80ab6663")
     assert loaded is not None
     out_pdf = generate_annotated_pdf("eb774d3c80ab6663", loaded)
     assert out_pdf.exists()
     assert out_pdf.stat().st_size > 5000
+
+def test_exports_bibtex_csv_markdown():
+    loaded = get_analysis_result("eb774d3c80ab6663")
+    assert loaded is not None
+    res = AnalysisResult.model_validate(loaded)
+
+    bibtex = generate_bibtex_export(res)
+    assert "@" in bibtex
+    assert "author =" in bibtex
+    assert "title =" in bibtex
+
+    csv_data = generate_csv_export(res)
+    assert "Reference_ID" in csv_data
+    assert "Integrity_Score" in csv_data
+    assert "Verification_Status" in csv_data
+
+    md_report = generate_markdown_report(res)
+    assert "# Citation Verification" in md_report
+    assert "Executive Summary" in md_report
+    assert "Reference Verification Table" in md_report

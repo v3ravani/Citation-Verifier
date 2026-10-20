@@ -1,3 +1,5 @@
+import asyncio
+import re
 from typing import Tuple, Optional, Dict, Any, List
 from rapidfuzz import fuzz
 from backend.app.models.schemas import ParsedReference, VerificationResult, ExternalRecord
@@ -6,18 +8,36 @@ from backend.app.metadata.crossref import fetch_crossref_by_doi, search_crossref
 from backend.app.metadata.semantic_scholar import fetch_s2_by_doi, search_s2_by_query
 from backend.app.metadata.openalex import fetch_openalex_by_doi, search_openalex_by_query
 from backend.app.metadata.arxiv import extract_arxiv_id, fetch_arxiv_by_id
+from backend.app.metadata.europe_pmc import fetch_europe_pmc_by_doi, search_europe_pmc_by_query
+from backend.app.metadata.dblp import fetch_dblp_by_doi, search_dblp_by_query
+from backend.app.metadata.datacite import fetch_datacite_by_doi, search_datacite_by_query
 from backend.app.core.logging_config import logger
 
 def compute_title_similarity(title1: Optional[str], title2: Optional[str]) -> float:
     """Computes normalized fuzzy similarity (0.0 to 1.0) between two titles."""
     if not title1 or not title2:
         return 0.0
-    norm1 = normalize_title(title1)
-    norm2 = normalize_title(title2)
+    
+    # Strip leading citation numbers or bracket prefixes
+    clean1 = re.sub(r'^(?:\[\d+\]|\d+\.|\d+\))\s*', '', title1).strip()
+    clean2 = re.sub(r'^(?:\[\d+\]|\d+\.|\d+\))\s*', '', title2).strip()
+
+    norm1 = normalize_title(clean1)
+    norm2 = normalize_title(clean2)
     if not norm1 or not norm2:
         return 0.0
-    score = fuzz.token_sort_ratio(norm1, norm2) / 100.0
-    return round(score, 3)
+
+    # Token sort ratio handles rearranged words and sub-titles
+    token_score = fuzz.token_sort_ratio(norm1, norm2) / 100.0
+    partial_score = fuzz.partial_ratio(norm1, norm2) / 100.0
+    
+    # If one title is cleanly contained in the other and longer than 15 chars
+    if len(norm1) >= 15 and len(norm2) >= 15:
+        if norm1 in norm2 or norm2 in norm1:
+            return round(max(token_score, 0.95), 3)
+
+    combined = max(token_score, partial_score * 0.9)
+    return round(combined, 3)
 
 def compute_author_match(parsed_authors: List[str], external_authors: List[str], raw_text: str) -> float:
     """Computes similarity of author lists."""
@@ -59,42 +79,83 @@ async def verify_reference(
     ref: ParsedReference
 ) -> Tuple[VerificationResult, Optional[ExternalRecord]]:
     """
-    Verifies a parsed reference across Crossref, Semantic Scholar, OpenAlex, and arXiv.
-    Synthesizes multi-source consensus.
+    Verifies a parsed reference across 7 scholarly registries:
+    Crossref, Semantic Scholar, OpenAlex, arXiv, Europe PMC, DBLP, and DataCite.
+    Queries sources concurrently and synthesizes multi-source consensus.
     """
     crossref_item: Optional[Dict[str, Any]] = None
     s2_item: Optional[Dict[str, Any]] = None
     openalex_item: Optional[Dict[str, Any]] = None
     arxiv_item: Optional[Dict[str, Any]] = None
+    europe_pmc_item: Optional[Dict[str, Any]] = None
+    dblp_item: Optional[Dict[str, Any]] = None
+    datacite_item: Optional[Dict[str, Any]] = None
 
     # Step 1: Check for explicit arXiv ID
     arxiv_id = extract_arxiv_id(ref.raw_text)
     if arxiv_id:
         arxiv_item = await fetch_arxiv_by_id(arxiv_id)
 
-    # Step 2: DOI lookup across Crossref, S2, and OpenAlex
+    # Step 2: Concurrent DOI lookup across all 6 DOI-indexed registries
     if ref.doi:
-        crossref_item = await fetch_crossref_by_doi(ref.doi)
-        s2_item = await fetch_s2_by_doi(ref.doi)
-        openalex_item = await fetch_openalex_by_doi(ref.doi)
+        doi_clean = ref.doi.strip().lower()
+        results = await asyncio.gather(
+            fetch_crossref_by_doi(doi_clean),
+            fetch_s2_by_doi(doi_clean),
+            fetch_openalex_by_doi(doi_clean),
+            fetch_europe_pmc_by_doi(doi_clean),
+            fetch_dblp_by_doi(doi_clean),
+            fetch_datacite_by_doi(doi_clean),
+            return_exceptions=True
+        )
+        if not isinstance(results[0], Exception) and results[0]:
+            crossref_item = results[0]
+        if not isinstance(results[1], Exception) and results[1]:
+            s2_item = results[1]
+        if not isinstance(results[2], Exception) and results[2]:
+            openalex_item = results[2]
+        if not isinstance(results[3], Exception) and results[3]:
+            europe_pmc_item = results[3]
+        if not isinstance(results[4], Exception) and results[4]:
+            dblp_item = results[4]
+        if not isinstance(results[5], Exception) and results[5]:
+            datacite_item = results[5]
 
-    # Step 3: Search queries if direct DOI match wasn't found
-    if not any([crossref_item, s2_item, openalex_item, arxiv_item]):
-        search_query = ref.title or ref.raw_text[:120]
-        search_query = " ".join(search_query.split())
+    # Step 3: Search queries if direct ID match wasn't found
+    all_direct_records = [r for r in [crossref_item, s2_item, openalex_item, arxiv_item, europe_pmc_item, dblp_item, datacite_item] if r]
+    if not all_direct_records:
+        raw_query = ref.title or ref.raw_text[:120]
+        # Clean leading brackets or numbers
+        clean_q = re.sub(r'^(?:\[\d+\]|\d+\.|\d+\))\s*', '', raw_query).strip()
+        search_query = " ".join(clean_q.split())
         if len(search_query) > 10:
-            cr_results = await search_crossref_by_query(search_query, rows=2)
-            if cr_results:
-                crossref_item = cr_results[0]
-            s2_results = await search_s2_by_query(search_query, limit=2)
-            if s2_results:
-                s2_item = s2_results[0]
-            oa_results = await search_openalex_by_query(search_query, limit=2)
-            if oa_results:
-                openalex_item = oa_results[0]
+            search_tasks = await asyncio.gather(
+                search_crossref_by_query(search_query, rows=2),
+                search_s2_by_query(search_query, limit=2),
+                search_openalex_by_query(search_query, limit=2),
+                search_europe_pmc_by_query(search_query, limit=2),
+                search_dblp_by_query(search_query, limit=2),
+                search_datacite_by_query(search_query, limit=2),
+                return_exceptions=True
+            )
+            if not isinstance(search_tasks[0], Exception) and search_tasks[0]:
+                crossref_item = search_tasks[0][0]
+            if not isinstance(search_tasks[1], Exception) and search_tasks[1]:
+                s2_item = search_tasks[1][0]
+            if not isinstance(search_tasks[2], Exception) and search_tasks[2]:
+                openalex_item = search_tasks[2][0]
+            if not isinstance(search_tasks[3], Exception) and search_tasks[3]:
+                europe_pmc_item = search_tasks[3][0]
+            if not isinstance(search_tasks[4], Exception) and search_tasks[4]:
+                dblp_item = search_tasks[4][0]
+            if not isinstance(search_tasks[5], Exception) and search_tasks[5]:
+                datacite_item = search_tasks[5][0]
 
     # Collect all available responses
-    available_records = [r for r in [crossref_item, s2_item, openalex_item, arxiv_item] if r]
+    available_records = [
+        r for r in [crossref_item, s2_item, openalex_item, arxiv_item, europe_pmc_item, dblp_item, datacite_item]
+        if r
+    ]
 
     if not available_records:
         return VerificationResult(
@@ -105,12 +166,10 @@ async def verify_reference(
             year_match=None,
             doi_match=False if ref.doi else None,
             verification_score=0.0,
-            notes=["No verified scholarly record found in Crossref, Semantic Scholar, OpenAlex, or arXiv."]
+            notes=["No verified scholarly record found across Crossref, Semantic Scholar, OpenAlex, arXiv, Europe PMC, DBLP, or DataCite."]
         ), None
 
     # Determine best record and merged attributes
-    # Prioritize title from most detailed source
-    primary = available_records[0]
     sources_matched = [r["source"] for r in available_records]
     source_label = "+".join(sources_matched)
 
@@ -120,16 +179,23 @@ async def verify_reference(
     venue = next((r["venue"] for r in available_records if r.get("venue")), None)
     doi = next((r["doi"] for r in available_records if r.get("doi")), None)
     url = next((r["url"] for r in available_records if r.get("url")), None)
-    # Prefer S2 or OpenAlex abstract
+    
+    # Retraction check across all sources
+    is_retracted = any(r.get("is_retracted") for r in available_records)
+
+    # Prefer S2, Europe PMC, OpenAlex, or arXiv for detailed abstract
     abstract = (
         (s2_item.get("abstract") if s2_item else None) or
+        (europe_pmc_item.get("abstract") if europe_pmc_item else None) or
         (openalex_item.get("abstract") if openalex_item else None) or
         (arxiv_item.get("abstract") if arxiv_item else None) or
+        (datacite_item.get("abstract") if datacite_item else None) or
         (crossref_item.get("abstract") if crossref_item else None)
     )
     citation_count = (
         (s2_item.get("citation_count") if s2_item else None) or
-        (openalex_item.get("citation_count") if openalex_item else None)
+        (openalex_item.get("citation_count") if openalex_item else None) or
+        (europe_pmc_item.get("citation_count") if europe_pmc_item else None)
     )
 
     external_rec = ExternalRecord(
@@ -141,6 +207,8 @@ async def verify_reference(
         abstract=abstract,
         citation_count=citation_count,
         url=url,
+        is_retracted=is_retracted,
+        sources_verified=sources_matched,
         source=source_label
     )
 
@@ -153,6 +221,10 @@ async def verify_reference(
     )
 
     notes = []
+    # Retraction alert note
+    if is_retracted:
+        notes.append("RETRACTION ALERT: This cited work is flagged as RETRACTED or subject to an expression of concern in academic databases.")
+
     score = 0.0
     if doi_match is True:
         score += 35.0
@@ -174,14 +246,21 @@ async def verify_reference(
     elif year_match is False:
         notes.append(f"Year mismatch: extracted {ref.year} vs record {year}")
 
+    # Multi-source consensus bonus
+    if len(sources_matched) >= 2 and (doi_match or title_sim >= 0.85):
+        score += 5.0
+        notes.append(f"Multi-registry consensus confirmed across {len(sources_matched)} sources ({', '.join(sources_matched)}).")
+
     score = round(min(100.0, score), 1)
 
     # Classification
-    if doi_match is True or (title_sim >= 0.90 and (year_match is not False) and author_match >= 0.6):
+    if is_retracted:
+        status = "metadata_mismatch"
+    elif doi_match is True or (title_sim >= 0.88 and (year_match is not False) and author_match >= 0.5):
         status = "verified_exact"
-    elif title_sim >= 0.80 and (year_match is not False or author_match >= 0.4):
+    elif title_sim >= 0.78 and (year_match is not False or author_match >= 0.4):
         status = "verified_probable"
-    elif title_sim >= 0.60:
+    elif title_sim >= 0.58:
         status = "metadata_mismatch"
         notes.append("Probable title match with conflicting bibliographic metadata.")
     else:

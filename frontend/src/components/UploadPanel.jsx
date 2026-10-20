@@ -50,7 +50,7 @@ export default function UploadPanel({ onUploadSuccess, isProcessing, processingS
           Verify citations beyond the bibliography.
         </h1>
         <p style={{ fontSize: "1.0625rem", color: "var(--text-secondary)", maxWidth: "680px", margin: "0 auto", lineHeight: 1.6 }}>
-          Inspect whether references exist, compare extracted metadata across Crossref, Semantic Scholar, OpenAlex, and arXiv, and verify whether cited sources are semantically relevant to the claims they support.
+          Inspect whether references exist, compare extracted metadata across 7 global scholarly registries (Crossref, Semantic Scholar, OpenAlex, arXiv, Europe PMC, DBLP, DataCite), and verify whether cited sources are semantically relevant to the claims they support.
         </p>
       </div>
 
@@ -87,7 +87,7 @@ export default function UploadPanel({ onUploadSuccess, isProcessing, processingS
               {processingStatus || "Processing document..."}
             </div>
             <p style={{ fontSize: "0.875rem", color: "var(--text-muted)", maxWidth: "450px", margin: "0 auto" }}>
-              Extracting text, querying Crossref, Semantic Scholar, OpenAlex & arXiv, and computing local sentence embeddings...
+              Extracting text, querying 7 global scholarly registries, verifying retractions, and computing local sentence embeddings...
             </p>
           </div>
         ) : (
@@ -96,7 +96,7 @@ export default function UploadPanel({ onUploadSuccess, isProcessing, processingS
               Drag and drop your research paper PDF here
             </h3>
             <p style={{ fontSize: "0.875rem", color: "var(--text-muted)", marginBottom: "1.25rem" }}>
-              Supports machine-readable academic PDFs (IEEE, APA, arXiv, ACM) up to 30 MB
+              Supports machine-readable academic PDFs (IEEE, APA, arXiv, ACM, Nature, Springer) up to 30 MB
             </p>
             <button
               type="button"
@@ -125,7 +125,7 @@ export default function UploadPanel({ onUploadSuccess, isProcessing, processingS
       <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", padding: "0.875rem 1rem", backgroundColor: "var(--bg-secondary)", border: "1px solid var(--border-subtle)", borderRadius: "6px", marginBottom: "2.5rem" }}>
         <ShieldCheck size={18} style={{ color: "var(--accent-primary)", flexShrink: 0 }} />
         <span style={{ fontSize: "0.8125rem", color: "var(--text-secondary)" }}>
-          <strong>Privacy & Architecture:</strong> Files are stored locally on the host filesystem. Academic metadata is queried directly from Crossref, Semantic Scholar, OpenAlex, and arXiv. No external generative AI or LLM API is used.
+          <strong>Privacy & Architecture:</strong> Files are stored locally on the host filesystem. Academic metadata is queried directly from 7 authoritative registries (Crossref, Semantic Scholar, OpenAlex, arXiv, Europe PMC, DBLP, DataCite). Retracted works are automatically checked. No external generative AI or LLM API is used.
         </span>
       </div>
 

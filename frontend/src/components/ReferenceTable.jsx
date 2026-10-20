@@ -14,6 +14,7 @@ export default function ReferenceTable({ references, onSelectReference, activeFi
       if (activeFilter === "metadata_mismatch" && ref.verification.status !== "metadata_mismatch") return false;
       if (activeFilter === "unverified" && ref.verification.status !== "unverified") return false;
       if (activeFilter === "overclaim" && (!ref.citation_occurrences || !ref.citation_occurrences.some((c) => c.overclaim_flag))) return false;
+      if (activeFilter === "retracted" && !ref.is_retracted) return false;
 
       // 2. Search Query
       if (searchQuery.trim()) {
@@ -96,6 +97,7 @@ export default function ReferenceTable({ references, onSelectReference, activeFi
               <option value="verified_exact">Verified Exact Only</option>
               <option value="verified_probable">Probable Matches Only</option>
               <option value="metadata_mismatch">Metadata Mismatches Only</option>
+              <option value="retracted">Retracted Citations Only</option>
               <option value="unverified">Unverified Only</option>
               <option value="overclaim">Flagged Contexts Only</option>
             </select>
@@ -172,8 +174,13 @@ export default function ReferenceTable({ references, onSelectReference, activeFi
                       </span>
                     </td>
                     <td>
-                      <div style={{ fontWeight: 600, color: "var(--text-primary)", marginBottom: "0.25rem", lineHeight: 1.35 }}>
-                        {title}
+                      <div style={{ fontWeight: 600, color: "var(--text-primary)", marginBottom: "0.25rem", lineHeight: 1.35, display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
+                        <span>{title}</span>
+                        {ref.is_retracted && (
+                          <span style={{ fontSize: "0.65rem", fontWeight: 700, backgroundColor: "#fef2f2", color: "#b91c1c", border: "1px solid #fca5a5", padding: "0.1rem 0.4rem", borderRadius: "4px", textTransform: "uppercase" }}>
+                            ⚠️ Retracted Work
+                          </span>
+                        )}
                       </div>
                       <div style={{ fontSize: "0.75rem", color: "var(--text-muted)", fontStyle: "italic", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: "450px" }}>
                         {ref.raw_text}

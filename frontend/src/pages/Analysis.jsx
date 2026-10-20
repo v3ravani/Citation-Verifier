@@ -1,15 +1,25 @@
 import React, { useState } from "react";
-import { Download, RefreshCw, FileText, Share2, ArrowLeft, Calendar, FileCheck, Hash, Sparkles } from "lucide-react";
+import { Download, RefreshCw, FileText, Share2, ArrowLeft, Calendar, FileCheck, Hash, Sparkles, ShieldAlert, Clock, FileSpreadsheet, Code2 } from "lucide-react";
 import SummaryCards from "../components/SummaryCards";
 import ReferenceTable from "../components/ReferenceTable";
 import ReferenceDetailsModal from "../components/ReferenceDetailsModal";
 import CitationGraph3D from "../components/CitationGraph3D";
 import CitationSuggester from "../components/CitationSuggester";
-import { getTxtExportUrl, getJsonExportUrl, getAnnotatedPdfExportUrl, analyzePaperById } from "../api/client";
+import CitationGapFinder from "../components/CitationGapFinder";
+import CitationTimeline from "../components/CitationTimeline";
+import {
+  getTxtExportUrl,
+  getJsonExportUrl,
+  getAnnotatedPdfExportUrl,
+  getBibtexExportUrl,
+  getCsvExportUrl,
+  getMarkdownExportUrl,
+  analyzePaperById
+} from "../api/client";
 
 export default function Analysis({ result, onBack, onUpdateResult }) {
   const [selectedReference, setSelectedReference] = useState(null);
-  const [activeTab, setActiveTab] = useState("table"); // "table" or "graph"
+  const [activeTab, setActiveTab] = useState("table"); // "table", "graph", "gaps", "timeline", "suggester"
   const [activeFilter, setActiveFilter] = useState("all");
   const [isRerunning, setIsRerunning] = useState(false);
 
@@ -39,10 +49,15 @@ export default function Analysis({ result, onBack, onUpdateResult }) {
     }
   };
 
+  const handleSelectYearFromTimeline = (year) => {
+    setActiveTab("table");
+    setActiveFilter("all");
+  };
+
   return (
     <div>
-      {/* Top Bar */}
-      <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: "1rem", marginBottom: "1.5rem", paddingBottom: "1rem", borderBottom: "1px solid var(--border-subtle)" }}>
+      {/* Top Product Header */}
+      <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: "1rem", marginBottom: "1.5rem", paddingBottom: "1.25rem", borderBottom: "1px solid var(--border-subtle)" }}>
         <div>
           <button
             type="button"
@@ -50,11 +65,11 @@ export default function Analysis({ result, onBack, onUpdateResult }) {
             onClick={onBack}
             style={{ marginBottom: "0.5rem" }}
           >
-            <ArrowLeft size={14} />
-            <span>Upload Another Paper</span>
+            <ArrowLeft size={13} />
+            <span>Upload Another Document</span>
           </button>
 
-          <h2 style={{ fontSize: "1.25rem", fontWeight: 700, color: "var(--text-primary)", letterSpacing: "-0.01em", marginBottom: "0.25rem" }}>
+          <h2 style={{ fontSize: "1.375rem", fontWeight: 700, color: "var(--text-primary)", letterSpacing: "-0.015em", marginBottom: "0.25rem" }}>
             {paper.title_guess || paper.filename}
           </h2>
 
@@ -63,7 +78,7 @@ export default function Analysis({ result, onBack, onUpdateResult }) {
               <FileCheck size={13} /> {paper.filename} ({paper.pages} pages)
             </span>
             <span style={{ display: "inline-flex", alignItems: "center", gap: "0.25rem" }}>
-              <Hash size={13} /> ID: <code>{paper.id}</code>
+              <Hash size={13} /> SHA-256: <code>{paper.sha256 ? `${paper.sha256.slice(0, 16)}...` : paper.id}</code>
             </span>
             {result.analyzed_at && (
               <span style={{ display: "inline-flex", alignItems: "center", gap: "0.25rem" }}>
@@ -73,29 +88,63 @@ export default function Analysis({ result, onBack, onUpdateResult }) {
           </div>
         </div>
 
-        {/* Actions */}
-        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
+        {/* Product Action Suite */}
+        <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", flexWrap: "wrap" }}>
           <button
             type="button"
             className="btn-secondary"
             onClick={handleRerun}
             disabled={isRerunning}
-            title="Re-run verification pipeline"
+            title="Re-run verification pipeline with fresh cache"
           >
-            <RefreshCw size={14} className={isRerunning ? "spin" : ""} />
+            <RefreshCw size={13} className={isRerunning ? "spin" : ""} />
             <span>{isRerunning ? "Re-running..." : "Re-run"}</span>
           </button>
 
+          {/* Export Suite */}
           <a
             href={getAnnotatedPdfExportUrl(paper.id)}
             download
             className="btn-primary"
             style={{ textDecoration: "none", display: "inline-flex", alignItems: "center", gap: "0.35rem" }}
-            title="Export original PDF with precise green/yellow/red highlights and sticky review notes"
+            title="Download PDF marked up with precise red, yellow, and green highlights plus inline review notes"
           >
-            <Download size={14} />
-            <span>Export Annotated PDF</span>
-            <span style={{ fontSize: "0.7rem", backgroundColor: "rgba(255,255,255,0.25)", padding: "0.1rem 0.35rem", borderRadius: "10px", fontWeight: 700 }}>Flags & Notes</span>
+            <Download size={13} />
+            <span>Annotated PDF</span>
+            <span style={{ fontSize: "0.65rem", backgroundColor: "rgba(255,255,255,0.25)", padding: "0.1rem 0.35rem", borderRadius: "10px", fontWeight: 700 }}>Flags & Notes</span>
+          </a>
+
+          <a
+            href={getBibtexExportUrl(paper.id)}
+            download
+            className="btn-secondary"
+            style={{ textDecoration: "none" }}
+            title="Export verified bibliography in clean BibTeX format"
+          >
+            <Code2 size={13} />
+            <span>BibTeX</span>
+          </a>
+
+          <a
+            href={getCsvExportUrl(paper.id)}
+            download
+            className="btn-secondary"
+            style={{ textDecoration: "none" }}
+            title="Export citation audit spreadsheet in CSV format"
+          >
+            <FileSpreadsheet size={13} />
+            <span>CSV</span>
+          </a>
+
+          <a
+            href={getMarkdownExportUrl(paper.id)}
+            download
+            className="btn-secondary"
+            style={{ textDecoration: "none" }}
+            title="Export executive summary in Markdown format"
+          >
+            <FileText size={13} />
+            <span>MD</span>
           </a>
 
           <a
@@ -103,8 +152,8 @@ export default function Analysis({ result, onBack, onUpdateResult }) {
             download
             className="btn-secondary"
             style={{ textDecoration: "none" }}
+            title="Download plain-text report"
           >
-            <Download size={14} />
             <span>TXT</span>
           </a>
 
@@ -113,8 +162,8 @@ export default function Analysis({ result, onBack, onUpdateResult }) {
             download
             className="btn-secondary"
             style={{ textDecoration: "none" }}
+            title="Download complete JSON analysis result"
           >
-            <Download size={14} />
             <span>JSON</span>
           </a>
         </div>
@@ -131,7 +180,7 @@ export default function Analysis({ result, onBack, onUpdateResult }) {
       />
 
       {/* View Selector Tabs */}
-      <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "1rem", flexWrap: "wrap" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "1.25rem", flexWrap: "wrap", borderBottom: "1px solid var(--border-subtle)", paddingBottom: "0.75rem" }}>
         <button
           type="button"
           className={`btn-secondary ${activeTab === "table" ? "active" : ""}`}
@@ -164,6 +213,36 @@ export default function Analysis({ result, onBack, onUpdateResult }) {
 
         <button
           type="button"
+          className={`btn-secondary ${activeTab === "gaps" ? "active" : ""}`}
+          onClick={() => setActiveTab("gaps")}
+          style={{
+            backgroundColor: activeTab === "gaps" ? "var(--accent-light)" : "var(--bg-primary)",
+            borderColor: activeTab === "gaps" ? "var(--accent-primary)" : "var(--border-subtle)",
+            color: activeTab === "gaps" ? "var(--accent-primary)" : "var(--text-secondary)",
+            fontWeight: activeTab === "gaps" ? 600 : 500,
+          }}
+        >
+          <ShieldAlert size={15} />
+          <span>Citation Gap Finder</span>
+        </button>
+
+        <button
+          type="button"
+          className={`btn-secondary ${activeTab === "timeline" ? "active" : ""}`}
+          onClick={() => setActiveTab("timeline")}
+          style={{
+            backgroundColor: activeTab === "timeline" ? "var(--accent-light)" : "var(--bg-primary)",
+            borderColor: activeTab === "timeline" ? "var(--accent-primary)" : "var(--border-subtle)",
+            color: activeTab === "timeline" ? "var(--accent-primary)" : "var(--text-secondary)",
+            fontWeight: activeTab === "timeline" ? 600 : 500,
+          }}
+        >
+          <Clock size={15} />
+          <span>Publication Vintage & Timeline</span>
+        </button>
+
+        <button
+          type="button"
           className={`btn-secondary ${activeTab === "suggester" ? "active" : ""}`}
           onClick={() => setActiveTab("suggester")}
           style={{
@@ -178,7 +257,7 @@ export default function Analysis({ result, onBack, onUpdateResult }) {
         </button>
       </div>
 
-      {/* Main View Area */}
+      {/* Main Tab Views */}
       {activeTab === "table" ? (
         <ReferenceTable
           references={references}
@@ -191,17 +270,22 @@ export default function Analysis({ result, onBack, onUpdateResult }) {
           graph={graph}
           onSelectReference={handleSelectReferenceFromGraph}
         />
+      ) : activeTab === "gaps" ? (
+        <CitationGapFinder paperId={paper.id} />
+      ) : activeTab === "timeline" ? (
+        <CitationTimeline
+          references={references}
+          onSelectYear={handleSelectYearFromTimeline}
+        />
       ) : (
         <CitationSuggester />
       )}
 
       {/* Reference Details Modal Drawer */}
-      {selectedReference && (
-        <ReferenceDetailsModal
-          reference={selectedReference}
-          onClose={() => setSelectedReference(null)}
-        />
-      )}
+      <ReferenceDetailsModal
+        reference={selectedReference}
+        onClose={() => setSelectedReference(null)}
+      />
     </div>
   );
 }

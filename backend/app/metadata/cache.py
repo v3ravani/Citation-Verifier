@@ -17,6 +17,13 @@ class MetadataCache:
         for d in self.dirs.values():
             d.mkdir(parents=True, exist_ok=True)
 
+    def _get_dir(self, source: str) -> Path:
+        if source not in self.dirs:
+            d = CACHE_DIR / source
+            d.mkdir(parents=True, exist_ok=True)
+            self.dirs[source] = d
+        return self.dirs[source]
+
     def _hash_key(self, key: str) -> str:
         clean = " ".join(key.lower().strip().split())
         return hashlib.sha256(clean.encode("utf-8")).hexdigest()
@@ -25,9 +32,7 @@ class MetadataCache:
         """
         Retrieves cached response if valid and not expired.
         """
-        cache_dir = self.dirs.get(source)
-        if not cache_dir:
-            return None
+        cache_dir = self._get_dir(source)
 
         h = self._hash_key(key)
         cache_file = cache_dir / f"{h}.json"
@@ -57,9 +62,7 @@ class MetadataCache:
         """
         Stores an API response in the local cache.
         """
-        cache_dir = self.dirs.get(source)
-        if not cache_dir:
-            return
+        cache_dir = self._get_dir(source)
 
         h = self._hash_key(key)
         cache_file = cache_dir / f"{h}.json"

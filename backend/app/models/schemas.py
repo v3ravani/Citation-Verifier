@@ -49,6 +49,8 @@ class ExternalRecord(BaseModel):
     abstract: Optional[str] = None
     citation_count: Optional[int] = None
     url: Optional[str] = None
+    is_retracted: bool = False
+    sources_verified: List[str] = Field(default_factory=list)
     source: str = ""
 
 class AlternativeReference(BaseModel):
@@ -86,6 +88,7 @@ class ReferenceItem(BaseModel):
     overall_score: Optional[float] = None  # None if semantic score is unavailable
     score_breakdown: Dict[str, float] = Field(default_factory=dict)
     review_flags: List[str] = Field(default_factory=list)
+    is_retracted: bool = False
 
 class AnalysisSummary(BaseModel):
     references_detected: int = 0
@@ -101,6 +104,9 @@ class AnalysisSummary(BaseModel):
     likely_unrelated: int = 0
     context_unavailable: int = 0
     overclaim_flags: int = 0
+    retracted_citations_count: int = 0
+    average_integrity_score: float = 0.0
+    sources_queried: List[str] = Field(default_factory=list)
     graph_nodes_count: int = 0
     graph_edges_count: int = 0
 

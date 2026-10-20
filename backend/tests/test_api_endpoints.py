@@ -71,3 +71,31 @@ def test_annotated_pdf_export_for_verified_paper():
     assert resp.headers["content-type"] == "application/pdf"
     assert len(resp.content) > 1000
 
+def test_bibtex_export():
+    resp = client.get("/api/report/eb774d3c80ab6663/bibtex")
+    assert resp.status_code == 200
+    assert "application/x-bibtex" in resp.headers["content-type"]
+    assert "@" in resp.text
+
+def test_csv_export():
+    resp = client.get("/api/report/eb774d3c80ab6663/csv")
+    assert resp.status_code == 200
+    assert "text/csv" in resp.headers["content-type"]
+    assert "Reference_ID" in resp.text
+
+def test_markdown_export():
+    resp = client.get("/api/report/eb774d3c80ab6663/markdown")
+    assert resp.status_code == 200
+    assert "text/markdown" in resp.headers["content-type"]
+    assert "# Citation Verification" in resp.text
+
+def test_detect_citation_gaps_endpoint():
+    resp = client.post("/api/detect-citation-gaps", json={
+        "text": "Deep neural architectures have been shown to outperform conventional models on translation.",
+        "max_gaps": 2
+    })
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "total_gaps_detected" in data
+    assert "gaps" in data
+

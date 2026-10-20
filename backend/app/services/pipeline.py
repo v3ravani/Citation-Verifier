@@ -88,6 +88,10 @@ async def run_verification_pipeline(
 
         # Initial review flags
         review_flags = []
+        is_retracted = bool(ext_rec and ext_rec.is_retracted)
+        if is_retracted:
+            review_flags.append("RETRACTION WARNING: This cited work is flagged as retracted or subject to concern in academic registries.")
+
         if verif_res.status == "metadata_mismatch":
             review_flags.append("Metadata discrepancy detected between citation and scholarly record.")
         elif verif_res.status == "unverified":
@@ -104,7 +108,8 @@ async def run_verification_pipeline(
             external=ext_rec,
             citation_occurrences=mapped_citations.get(ref.reference_id, []),
             score_breakdown=meta_breakdown,
-            review_flags=review_flags
+            review_flags=review_flags,
+            is_retracted=is_retracted
         )
         verified_items.append(item)
 
@@ -272,6 +277,19 @@ async def run_verification_pipeline(
     c_unrelated = sum(1 for o in all_occs if o.classification == "likely_unrelated")
     c_unavail = sum(1 for o in all_occs if o.classification == "unavailable")
     overclaim_cnt = sum(1 for o in all_occs if o.overclaim_flag)
+    retracted_cnt = sum(1 for it in verified_items if it.is_retracted)
+    
+    scored_items = [it.overall_score for it in verified_items if it.overall_score is not None]
+    avg_score = round(sum(scored_items) / max(1, len(scored_items)), 1) if scored_items else 0.0
+
+    all_sources = sorted(list(set(
+        src
+        for it in verified_items
+        if it.external and it.external.sources_verified
+        for src in it.external.sources_verified
+    )))
+    if not all_sources:
+        all_sources = ["crossref", "semantic_scholar", "openalex", "arxiv", "europe_pmc", "dblp", "datacite"]
 
     summary = AnalysisSummary(
         references_detected=total_refs,
@@ -287,6 +305,9 @@ async def run_verification_pipeline(
         likely_unrelated=c_unrelated,
         context_unavailable=c_unavail,
         overclaim_flags=overclaim_cnt,
+        retracted_citations_count=retracted_cnt,
+        average_integrity_score=avg_score,
+        sources_queried=all_sources,
         graph_nodes_count=len(graph_nodes),
         graph_edges_count=len(graph_edges),
     )
@@ -303,7 +324,15 @@ async def run_verification_pipeline(
     methodology_info = {
         "model_name": "sentence-transformers/all-MiniLM-L6-v2",
         "vector_search": "FAISS IndexFlatIP (Normalized Inner Product)",
-        "metadata_apis": ["Crossref REST API", "Semantic Scholar Graph API"],
+        "metadata_apis": [
+            "Crossref REST API",
+            "Semantic Scholar Graph API",
+            "OpenAlex Global Works API",
+            "arXiv Preprints API",
+            "Europe PMC Life Sciences API",
+            "DBLP Computer Science Bibliography API",
+            "DataCite Global Registry API"
+        ],
         "similarity_thresholds": {
             "strongly_related": ">= 0.78",
             "moderately_related": "0.62 - 0.77",

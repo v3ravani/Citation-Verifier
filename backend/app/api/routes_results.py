@@ -4,6 +4,8 @@ from fastapi.responses import FileResponse, PlainTextResponse
 from backend.app.core.paths import RESULTS_DIR, CROSSREF_CACHE_DIR, SEMANTIC_SCHOLAR_CACHE_DIR, UPLOADS_DIR
 from backend.app.services.result_manager import get_analysis_result, sanitize_paper_id
 from backend.app.services.pdf_annotator import generate_annotated_pdf
+from backend.app.services.report_generator import generate_bibtex_export, generate_csv_export, generate_markdown_report
+from backend.app.models.schemas import AnalysisResult
 from backend.app.core.logging_config import logger
 
 router = APIRouter(prefix="/api", tags=["results"])
@@ -120,6 +122,69 @@ async def get_annotated_pdf(paper_id: str):
         path=str(annotated_path),
         media_type="application/pdf",
         filename=f"{clean_id}_annotated_audit.pdf"
+    )
+
+@router.get("/report/{paper_id}/bibtex")
+async def get_bibtex_export(paper_id: str):
+    """Generates and downloads clean BibTeX file for all verified references."""
+    try:
+        clean_id = sanitize_paper_id(paper_id)
+    except ValueError:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid paper ID format.")
+
+    result_data = get_analysis_result(clean_id)
+    if not result_data:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"No result found for '{clean_id}'.")
+
+    result = AnalysisResult.model_validate(result_data)
+    bibtex_str = generate_bibtex_export(result)
+
+    return Response(
+        content=bibtex_str,
+        media_type="application/x-bibtex",
+        headers={"Content-Disposition": f'attachment; filename="{clean_id}_verified_references.bib"'}
+    )
+
+@router.get("/report/{paper_id}/csv")
+async def get_csv_export(paper_id: str):
+    """Generates and downloads CSV verification audit spreadsheet."""
+    try:
+        clean_id = sanitize_paper_id(paper_id)
+    except ValueError:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid paper ID format.")
+
+    result_data = get_analysis_result(clean_id)
+    if not result_data:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"No result found for '{clean_id}'.")
+
+    result = AnalysisResult.model_validate(result_data)
+    csv_str = generate_csv_export(result)
+
+    return Response(
+        content=csv_str,
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{clean_id}_citation_audit.csv"'}
+    )
+
+@router.get("/report/{paper_id}/markdown")
+async def get_markdown_export(paper_id: str):
+    """Generates and downloads executive Markdown audit report."""
+    try:
+        clean_id = sanitize_paper_id(paper_id)
+    except ValueError:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid paper ID format.")
+
+    result_data = get_analysis_result(clean_id)
+    if not result_data:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"No result found for '{clean_id}'.")
+
+    result = AnalysisResult.model_validate(result_data)
+    md_str = generate_markdown_report(result)
+
+    return Response(
+        content=md_str,
+        media_type="text/markdown",
+        headers={"Content-Disposition": f'attachment; filename="{clean_id}_executive_report.md"'}
     )
 
 @router.get("/cache/status")

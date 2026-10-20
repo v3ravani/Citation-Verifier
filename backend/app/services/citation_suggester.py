@@ -1,10 +1,14 @@
 import re
+import asyncio
 from typing import List, Dict, Any, Optional
 import numpy as np
 from pydantic import BaseModel
 from backend.app.metadata.openalex import search_openalex_by_query
 from backend.app.metadata.semantic_scholar import search_s2_by_query
 from backend.app.metadata.arxiv import search_arxiv_by_query
+from backend.app.metadata.europe_pmc import search_europe_pmc_by_query
+from backend.app.metadata.dblp import search_dblp_by_query
+from backend.app.metadata.datacite import search_datacite_by_query
 from backend.app.nlp.embeddings import generate_embeddings
 from backend.app.core.logging_config import logger
 
@@ -32,6 +36,16 @@ class ParagraphSuggestionResponse(BaseModel):
     paragraph: str
     claims_analyzed: int
     results: List[ClaimSuggestionResult]
+
+class CitationGapItem(BaseModel):
+    sentence: str
+    assertion_phrase: str
+    suggestions: List[SuggestedCitation]
+
+class CitationGapsResponse(BaseModel):
+    paper_id: Optional[str] = None
+    total_gaps_detected: int
+    gaps: List[CitationGapItem]
 
 def format_ieee(authors: List[str], title: str, venue: Optional[str], year: Optional[int], doi: Optional[str]) -> str:
     """Formats a bibliographic record in standard IEEE format."""
@@ -115,7 +129,6 @@ def format_bibtex(authors: List[str], title: str, venue: Optional[str], year: Op
 
 def extract_search_terms(sentence: str) -> str:
     """Extracts significant keywords for scholarly API search queries."""
-    # Remove common English stop words
     stopwords = {
         "a", "an", "the", "in", "on", "at", "by", "for", "with", "about", "against", "between",
         "into", "through", "during", "before", "after", "above", "below", "to", "from", "up",
@@ -135,19 +148,17 @@ def extract_search_terms(sentence: str) -> str:
 async def suggest_citations_for_paragraph(paragraph: str, max_claims: int = 3, max_per_claim: int = 5) -> ParagraphSuggestionResponse:
     """
     Analyzes an input paragraph, identifies individual factual claims or topic sentences,
-    searches academic databases (OpenAlex, Semantic Scholar, arXiv), embeds claims and candidate
-    works with Sentence-BERT, ranks by semantic similarity, and generates citations.
+    searches academic databases (OpenAlex, Semantic Scholar, arXiv, Europe PMC, DBLP, DataCite),
+    embeds claims and candidate works with Sentence-BERT, ranks by semantic similarity, and generates citations.
     """
     cleaned = paragraph.strip()
     if not cleaned:
         return ParagraphSuggestionResponse(paragraph="", claims_analyzed=0, results=[])
 
-    # Split into candidate sentences
     raw_sentences = re.split(r'(?<=[.!?])\s+', cleaned)
     candidate_claims = [s.strip() for s in raw_sentences if len(s.strip()) >= 25]
 
     if not candidate_claims:
-        # If no punctuated sentences, treat entire text as one claim
         candidate_claims = [cleaned[:300]]
 
     claims_to_process = candidate_claims[:max_claims]
@@ -158,26 +169,32 @@ async def suggest_citations_for_paragraph(paragraph: str, max_claims: int = 3, m
         if not query or len(query) < 4:
             query = claim[:60]
 
-        # Multi-source concurrent querying
-        oa_records = await search_openalex_by_query(query, limit=5)
-        s2_records = await search_s2_by_query(query, limit=5)
-        arxiv_records = await search_arxiv_by_query(query, max_results=3)
+        # Multi-source concurrent querying across 6 indices
+        tasks = await asyncio.gather(
+            search_openalex_by_query(query, limit=4),
+            search_s2_by_query(query, limit=4),
+            search_arxiv_by_query(query, max_results=3),
+            search_europe_pmc_by_query(query, limit=3),
+            search_dblp_by_query(query, limit=3),
+            search_datacite_by_query(query, limit=3),
+            return_exceptions=True
+        )
 
-        # Deduplicate candidates across sources
         candidates: Dict[str, Dict[str, Any]] = {}
-
-        for rec in (oa_records + s2_records + arxiv_records):
-            key = (rec.get("doi") or rec.get("title") or "").strip().lower()
-            if not key or len(key) < 5:
+        for t_res in tasks:
+            if isinstance(t_res, Exception) or not t_res:
                 continue
-            if key not in candidates:
-                candidates[key] = rec
-            else:
-                # Merge fields if missing
-                if not candidates[key].get("abstract") and rec.get("abstract"):
-                    candidates[key]["abstract"] = rec.get("abstract")
-                if not candidates[key].get("citation_count") and rec.get("citation_count"):
-                    candidates[key]["citation_count"] = rec.get("citation_count")
+            for rec in t_res:
+                key = (rec.get("doi") or rec.get("title") or "").strip().lower()
+                if not key or len(key) < 5:
+                    continue
+                if key not in candidates:
+                    candidates[key] = rec
+                else:
+                    if not candidates[key].get("abstract") and rec.get("abstract"):
+                        candidates[key]["abstract"] = rec.get("abstract")
+                    if not candidates[key].get("citation_count") and rec.get("citation_count"):
+                        candidates[key]["citation_count"] = rec.get("citation_count")
 
         candidate_list = list(candidates.values())
         if not candidate_list:
@@ -193,7 +210,7 @@ async def suggest_citations_for_paragraph(paragraph: str, max_claims: int = 3, m
         claim_emb = embeddings[0]
         cand_embs = embeddings[1:]
 
-        # Cosine similarity (since embeddings are L2 normalized in generate_embeddings, dot product = cosine)
+        # Cosine similarity
         sim_scores = np.dot(cand_embs, claim_emb)
 
         suggestions: List[SuggestedCitation] = []
@@ -201,7 +218,6 @@ async def suggest_citations_for_paragraph(paragraph: str, max_claims: int = 3, m
             sim = float(sim_scores[idx])
             sim = max(0.0, min(1.0, sim))
 
-            # Determine relevance badge
             if sim >= 0.70:
                 badge = "Highly Relevant"
             elif sim >= 0.50:
@@ -242,7 +258,6 @@ async def suggest_citations_for_paragraph(paragraph: str, max_claims: int = 3, m
                 bibtex=bibtex
             ))
 
-        # Sort descending by semantic similarity
         suggestions.sort(key=lambda s: s.semantic_similarity, reverse=True)
         top_suggestions = suggestions[:max_per_claim]
 
@@ -255,4 +270,70 @@ async def suggest_citations_for_paragraph(paragraph: str, max_claims: int = 3, m
         paragraph=paragraph,
         claims_analyzed=len(results),
         results=results
+    )
+
+ASSERTIVE_GAP_PATTERNS = [
+    r'\b(?:has\s+been\s+shown|have\s+been\s+shown|has\s+shown|have\s+shown)\b',
+    r'\b(?:demonstrates?\s+that|demonstrated\s+that)\b',
+    r'\b(?:studies\s+show|research\s+shows|previous\s+works?|prior\s+works?)\b',
+    r'\b(?:proven\s+that|proves\s+that)\b',
+    r'\b(?:it\s+is\s+well\s+known|it\s+is\s+widely\s+accepted)\b',
+    r'\b(?:outperforms?\b|significantly\s+improves?)\b',
+    r'\b(?:state-of-the-art\s+results?|benchmark\s+performance)\b',
+    r'\b(?:conventional\s+methods?|traditional\s+approaches?)\b'
+]
+
+async def detect_citation_gaps_in_text(full_text: str, max_gaps: int = 5) -> CitationGapsResponse:
+    """
+    Scans document body text for assertive claims that lack any in-text citation markers,
+    and queries scholarly indices to suggest authoritative supporting citations.
+    """
+    if not full_text:
+        return CitationGapsResponse(total_gaps_detected=0, gaps=[])
+
+    raw_sentences = re.split(r'(?<=[.!?])\s+', full_text)
+    gap_candidates = []
+
+    for s in raw_sentences:
+        clean_s = s.strip()
+        if len(clean_s) < 35 or len(clean_s) > 300:
+            continue
+
+        # Check if sentence already contains citation markers [1], (Smith, 2020), etc.
+        if re.search(r'\[[0-9,\s\-–]+\]', clean_s) or re.search(r'\([A-Z][a-zA-Z\s,\.&]+,\s*(?:19|20)\d{2}\)', clean_s):
+            continue
+
+        for pat in ASSERTIVE_GAP_PATTERNS:
+            m = re.search(pat, clean_s, re.IGNORECASE)
+            if m:
+                gap_candidates.append((clean_s, m.group(0)))
+                break
+
+    # Deduplicate and limit candidates
+    unique_candidates = []
+    seen = set()
+    for sent, phrase in gap_candidates:
+        if sent not in seen:
+            seen.add(sent)
+            unique_candidates.append((sent, phrase))
+        if len(unique_candidates) >= max_gaps:
+            break
+
+    if not unique_candidates:
+        return CitationGapsResponse(total_gaps_detected=0, gaps=[])
+
+    # Suggest citations for each detected gap
+    gaps: List[CitationGapItem] = []
+    for sent, phrase in unique_candidates:
+        resp = await suggest_citations_for_paragraph(sent, max_claims=1, max_per_claim=3)
+        suggestions = resp.results[0].suggestions if resp.results else []
+        gaps.append(CitationGapItem(
+            sentence=sent,
+            assertion_phrase=phrase,
+            suggestions=suggestions
+        ))
+
+    return CitationGapsResponse(
+        total_gaps_detected=len(gaps),
+        gaps=gaps
     )
