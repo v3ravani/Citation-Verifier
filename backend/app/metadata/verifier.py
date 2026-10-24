@@ -6,60 +6,93 @@ from typing import Tuple, Optional, Dict, Any, List
 from rapidfuzz import fuzz
 from backend.app.models.schemas import ParsedReference, VerificationResult, ExternalRecord
 from backend.app.citations.normalizer import normalize_title
+
+# 1. Primary Registries
 from backend.app.metadata.crossref import fetch_crossref_by_doi, search_crossref_by_query
 from backend.app.metadata.semantic_scholar import fetch_s2_by_doi, search_s2_by_query
 from backend.app.metadata.openalex import fetch_openalex_by_doi, search_openalex_by_query
-from backend.app.metadata.arxiv import extract_arxiv_id, fetch_arxiv_by_id
-from backend.app.metadata.europe_pmc import fetch_europe_pmc_by_doi, search_europe_pmc_by_query
-from backend.app.metadata.dblp import fetch_dblp_by_doi, search_dblp_by_query
 from backend.app.metadata.datacite import fetch_datacite_by_doi, search_datacite_by_query
+from backend.app.metadata.europe_pmc import fetch_europe_pmc_by_doi, search_europe_pmc_by_query
 from backend.app.metadata.pubmed import fetch_pubmed_by_doi, search_pubmed_by_query
+from backend.app.metadata.pmc import search_pmc_by_query
+from backend.app.metadata.arxiv import extract_arxiv_id, fetch_arxiv_by_id, search_arxiv_by_query
+from backend.app.metadata.dblp import fetch_dblp_by_doi, search_dblp_by_query
 from backend.app.metadata.doaj import fetch_doaj_by_doi, search_doaj_by_query
 from backend.app.metadata.hal import fetch_hal_by_doi, search_hal_by_query
+
+# 2. Open Access, Repositories & Preprints
+from backend.app.metadata.unpaywall import fetch_unpaywall_by_doi
+from backend.app.metadata.opencitations import fetch_opencitations_by_doi
+from backend.app.metadata.openaire import fetch_openaire_by_doi, search_openaire_by_query
+from backend.app.metadata.core_ac import fetch_core_by_doi, search_core_by_query
+from backend.app.metadata.orcid import fetch_orcid_by_doi, search_orcid_by_query
+from backend.app.metadata.biorxiv import fetch_biorxiv_by_doi, search_biorxiv_by_query
+from backend.app.metadata.zenodo import fetch_zenodo_by_doi, search_zenodo_by_query
+from backend.app.metadata.figshare import fetch_figshare_by_doi, search_figshare_by_query
+from backend.app.metadata.osf import fetch_osf_by_doi, search_osf_by_query
+
+# 3. Domain-Specific & Citation Indices
+from backend.app.metadata.google_books import search_google_books_by_query
+from backend.app.metadata.clinicaltrials import extract_nct_id, fetch_clinical_study_by_id, search_clinicaltrials_by_query
+from backend.app.metadata.eric import search_eric_by_query
+from backend.app.metadata.repec import search_repec_by_query
+from backend.app.metadata.nasa_ads import fetch_nasa_ads_by_doi, search_nasa_ads_by_query
+from backend.app.metadata.ieee import fetch_ieee_by_doi, search_ieee_by_query
+from backend.app.metadata.scopus import fetch_scopus_by_doi, search_scopus_by_query
+from backend.app.metadata.wos import fetch_wos_by_doi, search_wos_by_query
+from backend.app.metadata.dimensions import fetch_dimensions_by_doi, search_dimensions_by_query
+
 from backend.app.core.logging_config import logger
 
 def clean_academic_title(raw: Optional[str]) -> str:
     """Cleans academic titles by removing HTML entities, brackets, and normalizing accents."""
     if not raw:
         return ""
-    # Decode HTML entities (&amp;, &quot;, &#39;)
     text = html.unescape(raw)
-    # Strip HTML tags
     text = re.sub(r'<[^>]+>', '', text)
-    # Strip leading citation numbers or bracket prefixes
     text = re.sub(r'^(?:\[\d+\]|\d+\.|\d+\))\s*', '', text)
-    # Normalize unicode accents/diacritics (e.g. Möbius -> Mobius)
     text = "".join(c for c in unicodedata.normalize('NFKD', text) if not unicodedata.combining(c))
     return text.strip()
 
-def compute_title_similarity(title1: Optional[str], title2: Optional[str]) -> float:
+def compute_title_similarity(title1: Optional[str], title2: Optional[str], raw_text: Optional[str] = None) -> float:
     """
     Computes high-precision fuzzy similarity (0.0 to 1.0) between two titles.
-    Includes subtitle parsing and token sort comparisons.
+    Includes token set ratio, subtitle parsing, and substring containment against raw reference text.
     """
-    if not title1 or not title2:
+    if not title1 and not raw_text:
+        return 0.0
+    if not title2:
         return 0.0
 
-    clean1 = clean_academic_title(title1)
     clean2 = clean_academic_title(title2)
-
-    norm1 = normalize_title(clean1)
     norm2 = normalize_title(clean2)
-    if not norm1 or not norm2:
+    if not norm2:
+        return 0.0
+
+    # 1. Check direct containment of record title in raw reference text
+    # (If a paper title is fully present within the reference string, it's almost certainly the right work)
+    if raw_text and len(norm2) >= 12:
+        norm_raw = normalize_title(raw_text)
+        if norm2 in norm_raw:
+            return 0.98
+
+    clean1 = clean_academic_title(title1 or raw_text)
+    norm1 = normalize_title(clean1)
+    if not norm1:
         return 0.0
 
     # Direct exact normalized match
     if norm1 == norm2:
         return 1.0
 
-    # Token sort ratio handles rearranged words and sub-titles
+    # Token sort ratio & token set ratio
     token_score = fuzz.token_sort_ratio(norm1, norm2) / 100.0
+    set_score = fuzz.token_set_ratio(norm1, norm2) / 100.0
     partial_score = fuzz.partial_ratio(norm1, norm2) / 100.0
 
     # Subtitle comparison: Academic titles frequently split at colon or dash
-    # e.g. "BERT: Pre-training of Deep..." vs "BERT - Pre-training..."
     sub_score = 0.0
-    for delimiter in [":", " - ", " – "]:
+    for delimiter in [":", " - ", " – ", " — "]:
         if delimiter in clean1 and delimiter in clean2:
             main1 = normalize_title(clean1.split(delimiter, 1)[0])
             main2 = normalize_title(clean2.split(delimiter, 1)[0])
@@ -67,13 +100,13 @@ def compute_title_similarity(title1: Optional[str], title2: Optional[str]) -> fl
                 sub_score = 0.95
                 break
 
-    # If one title is cleanly contained in the other and longer than 15 chars
+    # If one title is cleanly contained in the other and longer than 12 chars
     containment_score = 0.0
-    if len(norm1) >= 15 and len(norm2) >= 15:
+    if len(norm1) >= 12 and len(norm2) >= 12:
         if norm1 in norm2 or norm2 in norm1:
-            containment_score = 0.95
+            containment_score = 0.96
 
-    combined = max(token_score, partial_score * 0.9, sub_score, containment_score)
+    combined = max(token_score, set_score * 0.92, partial_score * 0.88, sub_score, containment_score)
     return round(combined, 3)
 
 def compute_author_match(parsed_authors: List[str], external_authors: List[str], raw_text: str) -> float:
@@ -84,7 +117,6 @@ def compute_author_match(parsed_authors: List[str], external_authors: List[str],
         return 0.0
 
     def extract_surname(name: str) -> str:
-        # Handles "Smith, J." and "J. Smith"
         if not name:
             return ""
         if "," in name:
@@ -92,11 +124,13 @@ def compute_author_match(parsed_authors: List[str], external_authors: List[str],
         parts = name.split()
         return parts[-1].strip().lower() if parts else ""
 
+    raw_lower = raw_text.lower() if raw_text else ""
+
     if not parsed_authors:
         matches = 0
         for ext in external_authors[:3]:
             surname = extract_surname(ext)
-            if len(surname) > 2 and surname in raw_text.lower():
+            if len(surname) > 2 and surname in raw_lower:
                 matches += 1
         return round(min(1.0, matches / max(1, min(len(external_authors), 3))), 2)
 
@@ -105,6 +139,10 @@ def compute_author_match(parsed_authors: List[str], external_authors: List[str],
 
     if first_ext and first_parsed and (first_ext == first_parsed or first_ext in first_parsed or first_parsed in first_ext):
         return 1.0
+
+    # Also check if external first author appears in raw text
+    if first_ext and len(first_ext) > 2 and first_ext in raw_lower:
+        return 0.9
 
     matches = 0
     ext_surnames = [extract_surname(a) for a in external_authors if extract_surname(a)]
@@ -155,125 +193,159 @@ async def verify_reference(
     ref: ParsedReference
 ) -> Tuple[VerificationResult, Optional[ExternalRecord]]:
     """
-    Verifies a parsed reference across 10 authoritative scholarly registries:
+    Verifies a parsed reference across 30 authoritative scholarly registries:
     1. Crossref
     2. Semantic Scholar
     3. OpenAlex
-    4. arXiv
-    5. Europe PMC
-    6. DBLP
-    7. DataCite
-    8. PubMed / NCBI MEDLINE
-    9. DOAJ (Directory of Open Access Journals)
-    10. HAL Open Science
+    4. DataCite
+    5. OpenAIRE
+    6. CORE
+    7. Unpaywall
+    8. OpenCitations
+    9. ORCID
+    10. Google Books API
+    11. PubMed
+    12. Europe PMC
+    13. PubMed Central (PMC)
+    14. arXiv
+    15. DBLP
+    16. NASA ADS
+    17. Directory of Open Access Journals (DOAJ)
+    18. bioRxiv
+    19. medRxiv
+    20. ClinicalTrials.gov
+    21. IEEE Xplore
+    22. Scopus
+    23. Web of Science
+    24. Dimensions
+    25. Zenodo
+    26. Figshare
+    27. Open Science Framework (OSF)
+    28. HAL Open Science
+    29. ERIC
+    30. RePEc
 
     Executes lookups concurrently with fallback query search and multi-registry consensus.
     """
-    crossref_item: Optional[Dict[str, Any]] = None
-    s2_item: Optional[Dict[str, Any]] = None
-    openalex_item: Optional[Dict[str, Any]] = None
-    arxiv_item: Optional[Dict[str, Any]] = None
-    europe_pmc_item: Optional[Dict[str, Any]] = None
-    dblp_item: Optional[Dict[str, Any]] = None
-    datacite_item: Optional[Dict[str, Any]] = None
-    pubmed_item: Optional[Dict[str, Any]] = None
-    doaj_item: Optional[Dict[str, Any]] = None
-    hal_item: Optional[Dict[str, Any]] = None
+    records: List[Dict[str, Any]] = []
 
-    # Step 1: Check for explicit arXiv ID
-    arxiv_id = extract_arxiv_id(ref.raw_text)
+    async def _safe_call(coro, timeout_sec: float = 4.5):
+        try:
+            return await asyncio.wait_for(coro, timeout=timeout_sec)
+        except Exception:
+            return None
+
+    # Step 1: Check for explicit specialized IDs (arXiv, ClinicalTrials NCT ID)
+    arxiv_id = extract_arxiv_id(ref.raw_text) or (extract_arxiv_id(ref.doi) if ref.doi else None)
     if arxiv_id:
-        arxiv_item = await fetch_arxiv_by_id(arxiv_id)
+        arxiv_rec = await _safe_call(fetch_arxiv_by_id(arxiv_id))
+        if arxiv_rec:
+            records.append(arxiv_rec)
 
-    # Step 2: Concurrent DOI lookup across all 9 DOI-indexed registries
+    nct_id = extract_nct_id(ref.raw_text)
+    if nct_id:
+        nct_rec = await _safe_call(fetch_clinical_study_by_id(nct_id))
+        if nct_rec:
+            records.append(nct_rec)
+
+    # Step 2: Concurrent DOI lookups across all DOI-indexed registries
     if ref.doi:
         doi_clean = ref.doi.strip().lower()
-        results = await asyncio.gather(
-            fetch_crossref_by_doi(doi_clean),
-            fetch_s2_by_doi(doi_clean),
-            fetch_openalex_by_doi(doi_clean),
-            fetch_europe_pmc_by_doi(doi_clean),
-            fetch_dblp_by_doi(doi_clean),
-            fetch_datacite_by_doi(doi_clean),
-            fetch_pubmed_by_doi(doi_clean),
-            fetch_doaj_by_doi(doi_clean),
-            fetch_hal_by_doi(doi_clean),
-            return_exceptions=True
-        )
-        if not isinstance(results[0], Exception) and results[0]:
-            crossref_item = results[0]
-        if not isinstance(results[1], Exception) and results[1]:
-            s2_item = results[1]
-        if not isinstance(results[2], Exception) and results[2]:
-            openalex_item = results[2]
-        if not isinstance(results[3], Exception) and results[3]:
-            europe_pmc_item = results[3]
-        if not isinstance(results[4], Exception) and results[4]:
-            dblp_item = results[4]
-        if not isinstance(results[5], Exception) and results[5]:
-            datacite_item = results[5]
-        if not isinstance(results[6], Exception) and results[6]:
-            pubmed_item = results[6]
-        if not isinstance(results[7], Exception) and results[7]:
-            doaj_item = results[7]
-        if not isinstance(results[8], Exception) and results[8]:
-            hal_item = results[8]
+        doi_tasks = [
+            # Primary registries
+            _safe_call(fetch_crossref_by_doi(doi_clean)),
+            _safe_call(fetch_s2_by_doi(doi_clean)),
+            _safe_call(fetch_openalex_by_doi(doi_clean)),
+            _safe_call(fetch_europe_pmc_by_doi(doi_clean)),
+            _safe_call(fetch_pubmed_by_doi(doi_clean)),
+            _safe_call(fetch_datacite_by_doi(doi_clean)),
+            _safe_call(fetch_dblp_by_doi(doi_clean)),
+            _safe_call(fetch_doaj_by_doi(doi_clean)),
+            _safe_call(fetch_hal_by_doi(doi_clean)),
+            # Repositories & open access
+            _safe_call(fetch_unpaywall_by_doi(doi_clean)),
+            _safe_call(fetch_opencitations_by_doi(doi_clean)),
+            _safe_call(fetch_openaire_by_doi(doi_clean)),
+            _safe_call(fetch_core_by_doi(doi_clean)),
+            _safe_call(fetch_biorxiv_by_doi(doi_clean)),
+            _safe_call(fetch_zenodo_by_doi(doi_clean)),
+            _safe_call(fetch_figshare_by_doi(doi_clean)),
+            _safe_call(fetch_osf_by_doi(doi_clean)),
+            _safe_call(fetch_orcid_by_doi(doi_clean)),
+            # Domain-specific & citation indices
+            _safe_call(fetch_ieee_by_doi(doi_clean)),
+            _safe_call(fetch_nasa_ads_by_doi(doi_clean)),
+            _safe_call(fetch_scopus_by_doi(doi_clean)),
+            _safe_call(fetch_wos_by_doi(doi_clean)),
+            _safe_call(fetch_dimensions_by_doi(doi_clean)),
+        ]
 
-    # Step 3: Search queries if direct ID match wasn't found
-    all_direct_records = [
-        r for r in [
-            crossref_item, s2_item, openalex_item, arxiv_item,
-            europe_pmc_item, dblp_item, datacite_item, pubmed_item,
-            doaj_item, hal_item
-        ] if r
-    ]
+        doi_results = await asyncio.gather(*doi_tasks, return_exceptions=True)
+        for res in doi_results:
+            if not isinstance(res, Exception) and res and isinstance(res, dict) and res.get("title"):
+                records.append(res)
 
-    if not all_direct_records:
-        raw_query = ref.title or ref.raw_text[:120]
-        clean_q = re.sub(r'^(?:\[\d+\]|\d+\.|\d+\))\s*', '', raw_query).strip()
-        search_query = " ".join(clean_q.split())
-        if len(search_query) > 10:
-            search_tasks = await asyncio.gather(
-                search_crossref_by_query(search_query, rows=2),
-                search_s2_by_query(search_query, limit=2),
-                search_openalex_by_query(search_query, limit=2),
-                search_europe_pmc_by_query(search_query, limit=2),
-                search_dblp_by_query(search_query, limit=2),
-                search_datacite_by_query(search_query, limit=2),
-                search_pubmed_by_query(search_query, limit=2),
-                search_doaj_by_query(search_query, limit=2),
-                search_hal_by_query(search_query, limit=2),
-                return_exceptions=True
-            )
-            if not isinstance(search_tasks[0], Exception) and search_tasks[0]:
-                crossref_item = search_tasks[0][0]
-            if not isinstance(search_tasks[1], Exception) and search_tasks[1]:
-                s2_item = search_tasks[1][0]
-            if not isinstance(search_tasks[2], Exception) and search_tasks[2]:
-                openalex_item = search_tasks[2][0]
-            if not isinstance(search_tasks[3], Exception) and search_tasks[3]:
-                europe_pmc_item = search_tasks[3][0]
-            if not isinstance(search_tasks[4], Exception) and search_tasks[4]:
-                dblp_item = search_tasks[4][0]
-            if not isinstance(search_tasks[5], Exception) and search_tasks[5]:
-                datacite_item = search_tasks[5][0]
-            if not isinstance(search_tasks[6], Exception) and search_tasks[6]:
-                pubmed_item = search_tasks[6][0]
-            if not isinstance(search_tasks[7], Exception) and search_tasks[7]:
-                doaj_item = search_tasks[7][0]
-            if not isinstance(search_tasks[8], Exception) and search_tasks[8]:
-                hal_item = search_tasks[8][0]
+    # Step 3: Search queries if direct ID lookup returned nothing or low count
+    if not records:
+        # Formulate clean search query: prefer title, otherwise strip numbering and author prefix
+        raw_query = ref.title or ""
+        if not raw_query or len(raw_query.strip()) < 8:
+            clean_q = re.sub(r'^(?:\[\d+\]|\(\d+\)|\d+[\.:\)]|\d+\s+)\s*', '', ref.raw_text).strip()
+            # If authors extracted, remove author prefix to isolate title
+            if ref.authors and len(ref.authors) > 0:
+                first_auth = ref.authors[0].split()[-1]
+                if first_auth in clean_q[:50]:
+                    parts = clean_q.split(first_auth, 1)
+                    if len(parts) > 1:
+                        clean_q = parts[1].lstrip(",.:; &")
+            # Strip year
+            clean_q = re.sub(r'[\(\[]?\b(19\d{2}|20\d{2})\b[\)\]]?', '', clean_q).strip()
+            raw_query = clean_q[:140]
 
-    # Collect all available responses
-    available_records = [
-        r for r in [
-            crossref_item, s2_item, openalex_item, arxiv_item,
-            europe_pmc_item, dblp_item, datacite_item, pubmed_item,
-            doaj_item, hal_item
-        ] if r
-    ]
+        clean_query_str = " ".join(raw_query.strip().split()[:14])
 
-    if not available_records:
+        if len(clean_query_str) >= 6:
+            search_tasks = [
+                # Fast General Scholarly Registries
+                _safe_call(search_crossref_by_query(clean_query_str, rows=2)),
+                _safe_call(search_s2_by_query(clean_query_str, limit=2)),
+                _safe_call(search_openalex_by_query(clean_query_str, limit=2)),
+                _safe_call(search_europe_pmc_by_query(clean_query_str, limit=2)),
+                _safe_call(search_pubmed_by_query(clean_query_str, limit=2)),
+                _safe_call(search_pmc_by_query(clean_query_str, limit=2)),
+                _safe_call(search_dblp_by_query(clean_query_str, limit=2)),
+                _safe_call(search_datacite_by_query(clean_query_str, limit=2)),
+                _safe_call(search_doaj_by_query(clean_query_str, limit=2)),
+                _safe_call(search_hal_by_query(clean_query_str, limit=2)),
+                _safe_call(search_arxiv_by_query(clean_query_str, max_results=2)),
+                # Repositories & Open Access
+                _safe_call(search_core_by_query(clean_query_str, limit=2)),
+                _safe_call(search_openaire_by_query(clean_query_str, limit=2)),
+                _safe_call(search_orcid_by_query(clean_query_str, limit=2)),
+                _safe_call(search_zenodo_by_query(clean_query_str, limit=2)),
+                _safe_call(search_figshare_by_query(clean_query_str, limit=2)),
+                _safe_call(search_osf_by_query(clean_query_str, limit=2)),
+                _safe_call(search_biorxiv_by_query(clean_query_str, limit=2)),
+                # Specialized & Domain Registries
+                _safe_call(search_google_books_by_query(clean_query_str, limit=2)),
+                _safe_call(search_eric_by_query(clean_query_str, limit=2)),
+                _safe_call(search_repec_by_query(clean_query_str, limit=2)),
+                _safe_call(search_clinicaltrials_by_query(clean_query_str, limit=2)),
+                _safe_call(search_nasa_ads_by_query(clean_query_str, limit=2)),
+                _safe_call(search_ieee_by_query(clean_query_str, limit=2)),
+                _safe_call(search_scopus_by_query(clean_query_str, limit=2)),
+                _safe_call(search_wos_by_query(clean_query_str, limit=2)),
+                _safe_call(search_dimensions_by_query(clean_query_str, limit=2)),
+            ]
+
+            query_results = await asyncio.gather(*search_tasks, return_exceptions=True)
+            for qr in query_results:
+                if not isinstance(qr, Exception) and qr and isinstance(qr, list):
+                    for item in qr:
+                        if isinstance(item, dict) and item.get("title"):
+                            records.append(item)
+
+    if not records:
         return VerificationResult(
             status="unverified",
             source="none",
@@ -282,39 +354,66 @@ async def verify_reference(
             year_match=None,
             doi_match=False if ref.doi else None,
             verification_score=0.0,
-            notes=["No verified scholarly record found across 10 authoritative registries (Crossref, S2, OpenAlex, arXiv, Europe PMC, DBLP, DataCite, PubMed, DOAJ, HAL)."]
+            notes=["No verified scholarly record found across 30 authoritative registries (Crossref, Semantic Scholar, OpenAlex, DataCite, OpenAIRE, CORE, Unpaywall, OpenCitations, ORCID, Google Books, PubMed, Europe PMC, PMC, arXiv, DBLP, NASA ADS, DOAJ, bioRxiv, medRxiv, ClinicalTrials.gov, IEEE Xplore, Scopus, Web of Science, Dimensions, Zenodo, Figshare, OSF, HAL, ERIC, RePEc)."]
         ), None
 
-    # Determine best record and merged attributes
-    sources_matched = [r["source"] for r in available_records]
+    # Step 4: Evaluate and rank all returned records
+    scored_candidates = []
+    for r in records:
+        rec_title = r.get("title", "")
+        sim = compute_title_similarity(ref.title or ref.raw_text, rec_title, raw_text=ref.raw_text)
+        auth_sim = compute_author_match(ref.authors, r.get("authors", []), ref.raw_text)
+        yr_m = check_year_match(ref.year, r.get("year"))
+        
+        doi_m = (
+            (ref.doi.lower() == r.get("doi", "").lower())
+            if (ref.doi and r.get("doi"))
+            else (False if ref.doi and not r.get("doi") else None)
+        )
+
+        # Composite candidate score for ranking
+        cand_score = sim * 50.0 + auth_sim * 25.0 + (15.0 if yr_m is True else 0.0) + (20.0 if doi_m is True else 0.0)
+        scored_candidates.append((cand_score, sim, auth_sim, yr_m, doi_m, r))
+
+    # Sort descending by match score
+    scored_candidates.sort(key=lambda x: x[0], reverse=True)
+    best_cand_score, best_sim, best_auth_sim, best_yr_m, best_doi_m, best_rec = scored_candidates[0]
+
+    # Filter matching records that agree on the candidate work (title similarity >= 0.70 or DOI match)
+    matching_records = [
+        r for _, s, _, _, dm, r in scored_candidates
+        if dm is True or s >= 0.70 or (s >= 0.55 and _ >= 40.0)
+    ]
+    if not matching_records:
+        matching_records = [best_rec]
+
+    sources_matched = []
+    for r in matching_records:
+        src = r.get("source")
+        if src and src not in sources_matched:
+            sources_matched.append(src)
+
     source_label = "+".join(sources_matched)
 
-    title = next((r["title"] for r in available_records if r.get("title")), "")
-    authors = next((r["authors"] for r in available_records if r.get("authors")), [])
-    year = next((r["year"] for r in available_records if r.get("year")), None)
-    venue = next((r["venue"] for r in available_records if r.get("venue")), None)
-    doi = next((r["doi"] for r in available_records if r.get("doi")), None)
-    url = next((r["url"] for r in available_records if r.get("url")), None)
-    
-    # Retraction check across all sources
-    is_retracted = any(r.get("is_retracted") for r in available_records)
+    # Resolve merged attributes from matching records
+    title = next((r["title"] for r in matching_records if r.get("title")), best_rec.get("title", ""))
+    authors = next((r["authors"] for r in matching_records if r.get("authors")), best_rec.get("authors", []))
+    year = next((r["year"] for r in matching_records if r.get("year")), best_rec.get("year"))
+    venue = next((r["venue"] for r in matching_records if r.get("venue")), best_rec.get("venue"))
+    doi = next((r["doi"] for r in matching_records if r.get("doi")), best_rec.get("doi"))
+    url = next((r["url"] for r in matching_records if r.get("url")), best_rec.get("url"))
+    is_retracted = any(r.get("is_retracted") for r in matching_records)
 
-    # Prefer detailed abstract
-    abstract = (
-        (s2_item.get("abstract") if s2_item else None) or
-        (europe_pmc_item.get("abstract") if europe_pmc_item else None) or
-        (openalex_item.get("abstract") if openalex_item else None) or
-        (arxiv_item.get("abstract") if arxiv_item else None) or
-        (datacite_item.get("abstract") if datacite_item else None) or
-        (hal_item.get("abstract") if hal_item else None) or
-        (doaj_item.get("abstract") if doaj_item else None) or
-        (crossref_item.get("abstract") if crossref_item else None)
-    )
-    citation_count = (
-        (s2_item.get("citation_count") if s2_item else None) or
-        (openalex_item.get("citation_count") if openalex_item else None) or
-        (europe_pmc_item.get("citation_count") if europe_pmc_item else None)
-    )
+    # Prefer most detailed abstract
+    abstract = None
+    for r in matching_records:
+        if r.get("abstract") and len(r["abstract"]) > 50:
+            abstract = r["abstract"]
+            break
+    if not abstract:
+        abstract = next((r["abstract"] for r in matching_records if r.get("abstract")), None)
+
+    citation_count = next((r["citation_count"] for r in matching_records if r.get("citation_count") is not None), None)
 
     external_rec = ExternalRecord(
         title=title,
@@ -330,16 +429,12 @@ async def verify_reference(
         source=source_label
     )
 
-    title_sim = compute_title_similarity(ref.title or ref.raw_text, title)
-    author_match = compute_author_match(ref.authors, authors, ref.raw_text)
-    year_match = check_year_match(ref.year, year)
-    doi_match = (
-        (ref.doi.lower() == doi.lower()) if (ref.doi and doi)
-        else (False if ref.doi and not doi else None)
-    )
+    title_sim = best_sim
+    author_match = best_auth_sim
+    year_match = best_yr_m
+    doi_match = best_doi_m
 
     notes = []
-    # Retraction alert note
     if is_retracted:
         notes.append("RETRACTION ALERT: This cited work is flagged as RETRACTED or subject to an expression of concern in academic databases.")
 
@@ -364,21 +459,24 @@ async def verify_reference(
     elif year_match is False:
         notes.append(f"Year mismatch: extracted {ref.year} vs record {year}")
 
-    # Multi-source consensus bonus
-    if len(sources_matched) >= 2 and (doi_match or title_sim >= 0.85):
+    # Multi-registry consensus confirmation
+    if len(sources_matched) >= 2 and (doi_match is True or title_sim >= 0.78):
         score += 5.0
-        notes.append(f"Multi-registry consensus confirmed across {len(sources_matched)} sources ({', '.join(sources_matched)}).")
+        registry_names = ", ".join(sources_matched)
+        notes.append(f"Multi-registry consensus confirmed across {len(sources_matched)} sources ({registry_names}).")
 
     score = round(min(100.0, score), 1)
 
     # Classification
     if is_retracted:
         status = "metadata_mismatch"
-    elif doi_match is True or (title_sim >= 0.88 and (year_match is not False) and author_match >= 0.5):
+    elif doi_match is True or (title_sim >= 0.84 and (year_match is not False) and (author_match >= 0.4 or not ref.authors)):
         status = "verified_exact"
-    elif title_sim >= 0.76 and (year_match is not False or author_match >= 0.4):
+    elif title_sim >= 0.70 and (year_match is not False or author_match >= 0.3):
         status = "verified_probable"
-    elif title_sim >= 0.55:
+    elif len(sources_matched) >= 2 and title_sim >= 0.65:
+        status = "verified_probable"
+    elif title_sim >= 0.52:
         status = "metadata_mismatch"
         notes.append("Probable title match with conflicting bibliographic metadata.")
     else:

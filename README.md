@@ -133,20 +133,30 @@ cd ..
 
 ## Running the Application
 
-### Start Backend Server
-```bash
-# From repository root
-.\venv\Scripts\uvicorn.exe backend.app.main:app --host 127.0.0.1 --port 8001
-```
-The API documentation is available at `http://127.0.0.1:8001/docs`.
+### Quick Start (1-Click)
+You can launch both servers simultaneously:
+- **Windows Command Prompt / Double-click**: Run `start.bat`
+- **Windows PowerShell**: Run `.\start.ps1`
 
-### Start Frontend Server
+---
+
+### Manual Launch
+
+#### 1. Start Backend Server
+From the repository root:
 ```bash
-# In a separate terminal
-cd frontend
-npm run dev -- --host 127.0.0.1 --port 5173
+.\venv\Scripts\uvicorn.exe backend.app.main:app --host 127.0.0.1 --port 8001 --reload
 ```
-Open your browser at `http://127.0.0.1:5173/`.
+- API Documentation (Swagger): `http://127.0.0.1:8001/docs`
+- Health check: `http://127.0.0.1:8001/api/health`
+
+#### 2. Start Frontend Server
+In a second terminal window:
+```bash
+cd frontend
+npm run dev
+```
+- Web Application: `http://127.0.0.1:5180`
 
 ## Scoring Methodology
 

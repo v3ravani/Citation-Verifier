@@ -31,13 +31,17 @@ class ParsedReference(BaseModel):
     url: Optional[str] = None
 
 class VerificationResult(BaseModel):
-    status: str = "unverified"  # verified_exact, verified_probable, metadata_mismatch, unverified, api_unavailable
-    source: str = "none"        # crossref, semantic_scholar, crossref+semantic_scholar
+    status: str = "unverified"  # verified_exact, verified_probable, user_verified, metadata_mismatch, unverified, api_unavailable
+    source: str = "none"        # crossref, semantic_scholar, crossref+semantic_scholar, user_override, etc.
     title_similarity: float = 0.0
     author_match: float = 0.0
     year_match: Optional[bool] = None
     doi_match: Optional[bool] = None
     verification_score: float = 0.0  # 0 to 100
+    is_user_verified: bool = False
+    user_verification_note: Optional[str] = None
+    user_verified_at: Optional[str] = None
+    original_status: Optional[str] = None
     notes: List[str] = Field(default_factory=list)
 
 class ExternalRecord(BaseModel):
@@ -99,6 +103,7 @@ class AnalysisSummary(BaseModel):
     references_detected: int = 0
     verified_exact: int = 0
     verified_probable: int = 0
+    user_verified: int = 0
     metadata_mismatch: int = 0
     unverified: int = 0
     api_unavailable: int = 0

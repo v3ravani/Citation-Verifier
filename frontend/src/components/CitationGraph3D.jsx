@@ -24,6 +24,7 @@ export default function CitationGraph3D({ graph, onSelectReference }) {
   const getStatusColorHex = (status) => {
     switch (status) {
       case "verified_exact":
+      case "user_verified":
         return 0x16a34a; // Green
       case "verified_probable":
         return 0x2563eb; // Royal Blue
@@ -39,6 +40,7 @@ export default function CitationGraph3D({ graph, onSelectReference }) {
   const getStatusColorCss = (status) => {
     switch (status) {
       case "verified_exact":
+      case "user_verified":
         return "#16a34a";
       case "verified_probable":
         return "#2563eb";

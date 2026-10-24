@@ -122,30 +122,66 @@ def split_raw_references(ref_text: str) -> List[tuple[int, str, str]]:
 
 def extract_reference_title(raw_text: str) -> Optional[str]:
     """
-    Extracts the publication title from a raw reference string.
+    Extracts the publication title from a raw reference string with high precision.
+    Supports IEEE, APA, Harvard, Chicago, Nature, Science, and ACM formats while
+    safely handling author initials, numbers in titles, subtitles, and punctuation.
     """
     if not raw_text:
         return None
 
-    # IEEE style: title in quotes: "Title of Paper,"
-    quote_match = re.search(r'["“]([^"”]+)["”]', raw_text)
-    if quote_match and len(quote_match.group(1).strip()) > 10:
-        return quote_match.group(1).strip().rstrip(".,")
+    # Strip leading numerical markers like "[1]", "1.", "1)", "(1)"
+    text_clean = re.sub(r'^\s*(?:\[\d+\]|\(\d+\)|\d+[\.:\)]|\d+\s+)\s*', '', raw_text).strip()
 
-    # APA style: Author (Year). Title. Journal / Venue.
-    apa_match = re.search(r'\((?:19\d{2}|20\d{2})\)\.?\s+([^\.]+)\.', raw_text)
-    if apa_match and len(apa_match.group(1).strip()) > 10:
-        return apa_match.group(1).strip().rstrip(".,")
+    # 1. Quoted titles: "Title of Paper", “Title”, 'Title'
+    quote_match = re.search(r'["“\'‘«]([^"”\'’»]{8,300})["”\'’»]', text_clean)
+    if quote_match:
+        cand = quote_match.group(1).strip().rstrip(".,")
+        if len(cand) >= 10 and not any(w in cand.lower() for w in ["vol.", "pp.", "proceedings of", "http://", "https://"]):
+            return cand
 
-    # Fallback: remove authors and year, take the next segment before next period
-    text_clean = re.sub(r'^\s*\[?\d+\]?\.?\s*', '', raw_text)
-    parts = text_clean.split(". ")
+    # 2. APA style: Author (Year[a-z]?). Title of Work. Journal / Publisher...
+    # Uses lookahead to stop before journal/venue indicator or next section
+    apa_match = re.search(r'\((?:19\d{2}|20\d{2})[a-z]?\)[\.:,]?\s+([A-Za-z0-9][^\n\r]{7,300}?)(?=\.\s+(?:In\s|Proc|Journal|Vol|arXiv|doi|http|https|[A-Z][a-z]+|\d+)|$)', text_clean)
+    if apa_match:
+        cand = apa_match.group(1).strip().rstrip(".,")
+        # Strip trailing dot if not an abbreviation
+        if len(cand) >= 10 and not any(w in cand.lower() for w in ["vol.", "pp.", "proceedings"]):
+            return cand
+
+    # 3. Harvard / Elsevier style: Authors, Year. Title of paper. Journal...
+    harvard_match = re.search(r'(?:,\s*|\.\s*)(?:19\d{2}|20\d{2})[a-z]?[\.,]\s+([A-Za-z0-9][^\n\r]{7,300}?)(?=\.\s+(?:In\s|Proc|Journal|Vol|arXiv|doi|http|https|[A-Z][a-z]+|\d+)|$)', text_clean)
+    if harvard_match:
+        cand = harvard_match.group(1).strip().rstrip(".,")
+        if len(cand) >= 10 and not any(w in cand.lower() for w in ["vol.", "pp.", "proceedings"]):
+            return cand
+
+    # 4. In-style: "Title. In: Proceedings of..." or "Title. In Advances in..."
+    in_match = re.search(r'([A-Za-z0-9][^\.]{8,250})\.\s*(?:In\s|In:|in\s)', text_clean)
+    if in_match:
+        cand = in_match.group(1).strip().rstrip(".,")
+        if len(cand) >= 10 and not any(w in cand.lower() for w in ["vol.", "pp.", "proceedings"]):
+            return cand
+
+    # 5. Sentence segment analysis: protects against splitting on author initials like "D. ", "A. "
+    masked = re.sub(r'\b([A-Z])\.\s*', r'\1_DOT_ ', text_clean)
+    for abbr in ["et al.", "eds.", "ed.", "vol.", "no.", "pp.", "trans.", "univ.", "dept.", "inc.", "co."]:
+        masked = masked.replace(abbr, abbr.replace(".", "_DOT_"))
+
+    parts = re.split(r'\.\s+', masked)
     if len(parts) >= 2:
-        candidate = parts[1].strip()
-        if len(candidate) > 15 and not any(w in candidate.lower() for w in ["vol", "pp", "pages", "proceedings"]):
-            return candidate.rstrip(".,")
-    if len(parts) >= 1 and len(parts[0]) > 25:
-        return parts[0].strip().rstrip(".,")
+        for p in parts[1:]:
+            cand = p.replace("_DOT_", ".").strip().rstrip(".,")
+            # Exclude short fragments, page numbers, or venue indicators
+            if len(cand) >= 14 and not any(w in cand.lower() for w in ["vol.", "pp.", "pages", "proceedings", "doi:", "http://", "https://", "isbn"]):
+                return cand
+
+    # 6. Fallback: segment following year
+    year_match = re.search(r'\b(?:19\d{2}|20\d{2})\b[\.,]?\s+(.+)', text_clean)
+    if year_match:
+        post_year = year_match.group(1).strip()
+        first_segment = re.split(r'\.\s+', post_year)[0].strip().rstrip(".,")
+        if len(first_segment) >= 12 and not any(w in first_segment.lower() for w in ["vol.", "pp.", "doi:"]):
+            return first_segment
 
     return None
 

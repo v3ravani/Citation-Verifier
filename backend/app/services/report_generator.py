@@ -25,6 +25,7 @@ def generate_txt_report(result: AnalysisResult) -> str:
     lines.append(f"References detected:        {result.summary.references_detected}")
     lines.append(f"Verified exact matches:     {result.summary.verified_exact}")
     lines.append(f"Probable matches:           {result.summary.verified_probable}")
+    lines.append(f"User verified records:      {getattr(result.summary, 'user_verified', 0)}")
     lines.append(f"Metadata mismatches:        {result.summary.metadata_mismatch}")
     lines.append(f"Unverified records:         {result.summary.unverified}")
     lines.append(f"Retracted citations flagged:{result.summary.retracted_citations_count}")

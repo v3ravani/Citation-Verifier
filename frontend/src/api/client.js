@@ -32,6 +32,18 @@ export async function analyzePaperById(paperId, rerun = false) {
   return response.json();
 }
 
+export async function getAnalysisProgress(paperId) {
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/analyze/${paperId}/progress`);
+    if (!response.ok) {
+      return null;
+    }
+    return await response.json();
+  } catch (err) {
+    return null;
+  }
+}
+
 export async function getPaperResult(paperId) {
   const response = await fetch(`${API_BASE_URL}/api/result/${paperId}`);
   if (!response.ok) {
@@ -67,6 +79,23 @@ export function getMarkdownExportUrl(paperId) {
 
 export function getHtmlExportUrl(paperId) {
   return `${API_BASE_URL}/api/report/${paperId}/html`;
+}
+
+export async function setUserVerification(paperId, referenceId, verified, note = null) {
+  const response = await fetch(`${API_BASE_URL}/api/result/${paperId}/reference/${referenceId}/user-verify`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ verified, note }),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.detail || `Failed to update user verification (HTTP ${response.status})`);
+  }
+
+  return response.json();
 }
 
 export async function suggestCitations(text, maxClaims = 3, maxPerClaim = 5) {

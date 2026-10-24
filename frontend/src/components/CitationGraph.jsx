@@ -36,6 +36,7 @@ export default function CitationGraph({ graph, onSelectReference }) {
   const getStatusColor = (status) => {
     switch (status) {
       case "verified_exact":
+      case "user_verified":
         return "#10B981"; // Emerald
       case "verified_probable":
         return "#3B82F6"; // Blue

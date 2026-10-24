@@ -16,7 +16,9 @@ import {
   getCsvExportUrl,
   getMarkdownExportUrl,
   getHtmlExportUrl,
-  analyzePaperById
+  analyzePaperById,
+  getAnalysisProgress,
+  setUserVerification
 } from "../api/client";
 
 export default function Analysis({ result, onBack, onUpdateResult }) {
@@ -24,6 +26,7 @@ export default function Analysis({ result, onBack, onUpdateResult }) {
   const [activeTab, setActiveTab] = useState("table"); // "table", "graph", "gaps", "timeline", "suggester"
   const [activeFilter, setActiveFilter] = useState("all");
   const [isRerunning, setIsRerunning] = useState(false);
+  const [rerunProgress, setRerunProgress] = useState({ percent: 10, stage: "Re-running pipeline..." });
 
   if (!result) return null;
 
@@ -32,15 +35,47 @@ export default function Analysis({ result, onBack, onUpdateResult }) {
   const references = result.references || [];
   const graph = result.graph || { nodes: [], edges: [] };
 
+  const handleToggleUserVerification = async (refItem, verified, note = null) => {
+    try {
+      const updated = await setUserVerification(paper.id, refItem.reference_id, verified, note);
+      onUpdateResult(updated);
+      if (selectedReference && selectedReference.reference_id === refItem.reference_id) {
+        const matching = updated.references.find((r) => r.reference_id === refItem.reference_id);
+        if (matching) setSelectedReference(matching);
+      }
+    } catch (err) {
+      alert(`User verification update failed: ${err.message}`);
+    }
+  };
+
   const handleRerun = async () => {
     setIsRerunning(true);
+    setRerunProgress({ percent: 15, stage: "Initiating re-analysis across 10 scholarly registries..." });
+    let poller = setInterval(async () => {
+      const p = await getAnalysisProgress(paper.id);
+      if (p) {
+        setRerunProgress({
+          percent: p.percent || 15,
+          stage: p.stage || "Re-running analysis...",
+          details: p.details || ""
+        });
+      }
+    }, 250);
+
     try {
       const refreshed = await analyzePaperById(paper.id, true);
-      onUpdateResult(refreshed);
+      clearInterval(poller);
+      setRerunProgress({ percent: 100, stage: "Completed! Refreshing audit views..." });
+      setTimeout(() => {
+        onUpdateResult(refreshed);
+      }, 350);
     } catch (e) {
+      clearInterval(poller);
       alert(`Re-run failed: ${e.message}`);
     } finally {
-      setIsRerunning(false);
+      setTimeout(() => {
+        setIsRerunning(false);
+      }, 400);
     }
   };
 
@@ -293,6 +328,7 @@ export default function Analysis({ result, onBack, onUpdateResult }) {
           onSelectReference={setSelectedReference}
           activeFilter={activeFilter}
           onFilterChange={setActiveFilter}
+          onToggleVerify={handleToggleUserVerification}
         />
       ) : activeTab === "graph" ? (
         <CitationGraph3D
@@ -319,7 +355,45 @@ export default function Analysis({ result, onBack, onUpdateResult }) {
       <ReferenceDetailsModal
         reference={selectedReference}
         onClose={() => setSelectedReference(null)}
+        onToggleVerify={handleToggleUserVerification}
       />
+
+      {/* Rerun Progress Modal Overlay */}
+      {isRerunning && (
+        <div className="modal-overlay" style={{ zIndex: 60 }}>
+          <div
+            className="modal-content"
+            style={{
+              maxWidth: "540px",
+              padding: "2rem",
+              textAlign: "center",
+              boxShadow: "0 20px 40px -10px rgba(0, 0, 0, 0.2)"
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "0.75rem", marginBottom: "1rem" }}>
+              <RefreshCw size={24} className="spin-slow" style={{ color: "var(--accent-primary)" }} />
+              <h3 style={{ fontSize: "1.25rem", fontWeight: 700, margin: 0 }}>Re-running Verification Pipeline</h3>
+            </div>
+            <p style={{ fontSize: "0.875rem", color: "var(--text-secondary)", marginBottom: "1.25rem" }}>
+              {rerunProgress.stage}
+            </p>
+
+            <div className="progress-track-wrapper" style={{ margin: "1rem 0" }}>
+              <div
+                className="progress-track-fill"
+                style={{ width: `${Math.max(5, Math.min(100, rerunProgress.percent))}%` }}
+              />
+            </div>
+
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "0.8125rem", color: "var(--text-muted)" }}>
+              <span>Parallel registries & FAISS</span>
+              <strong style={{ fontSize: "1.125rem", color: "var(--accent-primary)", fontFamily: "var(--font-mono)" }}>
+                {rerunProgress.percent}%
+              </strong>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

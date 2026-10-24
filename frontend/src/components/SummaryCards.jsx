@@ -1,12 +1,12 @@
 import React from "react";
-import { CheckCircle2, HelpCircle, AlertTriangle, XCircle, FileText, Target, AlertOctagon, ShieldAlert, Award, ShieldCheck } from "lucide-react";
+import { CheckCircle2, HelpCircle, AlertTriangle, XCircle, FileText, Target, AlertOctagon, ShieldAlert, Award, ShieldCheck, UserCheck } from "lucide-react";
 
 export default function SummaryCards({ summary, onFilterClick, activeFilter }) {
   if (!summary) return null;
 
   const avgScore = summary.average_integrity_score || (
     summary.references_detected > 0
-      ? Math.round(((summary.verified_exact * 100 + summary.verified_probable * 80) / (summary.references_detected * 100)) * 100)
+      ? Math.round(((summary.verified_exact * 100 + summary.verified_probable * 80 + (summary.user_verified || 0) * 100) / (summary.references_detected * 100)) * 100)
       : 0
   );
 
@@ -45,6 +45,15 @@ export default function SummaryCards({ summary, onFilterClick, activeFilter }) {
       color: "var(--status-probable-text)",
       bg: "var(--status-probable-bg)",
       border: "var(--status-probable-border)",
+    },
+    {
+      id: "user_verified",
+      label: "User Verified",
+      value: summary.user_verified || 0,
+      icon: UserCheck,
+      color: "#047857",
+      bg: "#ECFDF5",
+      border: "#A7F3D0",
     },
     {
       id: "peer_reviewed",

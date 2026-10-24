@@ -10,10 +10,21 @@ ARXIV_API_URL = "http://export.arxiv.org/api/query"
 ATOM_NS = {"atom": "http://www.w3.org/2005/Atom", "arxiv": "http://arxiv.org/schemas/atom"}
 
 def extract_arxiv_id(text: str) -> Optional[str]:
-    """Extracts standard arXiv ID from text (e.g. arXiv:1706.03762 or 1706.03762)."""
+    """Extracts standard arXiv ID from text (e.g. arXiv:1706.03762, 1706.03762, or 10.48550/arXiv.1706.03762)."""
+    if not text:
+        return None
+    # Check DOI format first: 10.48550/arXiv.1706.03762
+    doi_match = re.search(r'10\.48550/arXiv\.([0-9]{4}\.[0-9]{4,5}(?:v[0-9]+)?)', text, re.IGNORECASE)
+    if doi_match:
+        return doi_match.group(1)
+    # Modern format: 1706.03762
     m = re.search(r'\b(?:arxiv:\s*)?([0-9]{4}\.[0-9]{4,5}(?:v[0-9]+)?)\b', text, re.IGNORECASE)
     if m:
         return m.group(1)
+    # Legacy format: hep-th/9912012
+    m_legacy = re.search(r'\b([a-z\-]+(?:\.[A-Z]{2})?/[0-9]{7}(?:v[0-9]+)?)\b', text, re.IGNORECASE)
+    if m_legacy:
+        return m_legacy.group(1)
     return None
 
 def parse_arxiv_entry(entry: ET.Element) -> Dict[str, Any]:

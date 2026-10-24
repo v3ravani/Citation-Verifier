@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from "react";
-import { Search, Filter, ArrowUpDown, ChevronRight, AlertTriangle } from "lucide-react";
+import { Search, Filter, ArrowUpDown, ChevronRight, AlertTriangle, CheckCircle2, UserCheck, Check } from "lucide-react";
 
-export default function ReferenceTable({ references, onSelectReference, activeFilter, onFilterChange }) {
+export default function ReferenceTable({ references, onSelectReference, activeFilter, onFilterChange, onToggleVerify }) {
   const [searchQuery, setSearchQuery] = useState("");
   const [sortBy, setSortBy] = useState("id_asc");
 
@@ -11,8 +11,9 @@ export default function ReferenceTable({ references, onSelectReference, activeFi
       // 1. Status Filter
       if (activeFilter === "verified_exact" && ref.verification.status !== "verified_exact") return false;
       if (activeFilter === "verified_probable" && ref.verification.status !== "verified_probable") return false;
+      if (activeFilter === "user_verified" && ref.verification.status !== "user_verified" && !ref.verification.is_user_verified) return false;
       if (activeFilter === "metadata_mismatch" && ref.verification.status !== "metadata_mismatch") return false;
-      if (activeFilter === "unverified" && ref.verification.status !== "unverified") return false;
+      if (activeFilter === "unverified" && (ref.verification.status !== "unverified" || ref.verification.is_user_verified)) return false;
       if (activeFilter === "overclaim" && (!ref.citation_occurrences || !ref.citation_occurrences.some((c) => c.overclaim_flag))) return false;
       if (activeFilter === "retracted" && !ref.is_retracted) return false;
       if (activeFilter === "hallucination" && ref.hallucination_risk !== "HIGH") return false;
@@ -98,6 +99,7 @@ export default function ReferenceTable({ references, onSelectReference, activeFi
               <option value="all">All References ({references.length})</option>
               <option value="verified_exact">Verified Exact Only</option>
               <option value="verified_probable">Probable Matches Only</option>
+              <option value="user_verified">User Verified Only</option>
               <option value="peer_reviewed">Peer-Reviewed Only</option>
               <option value="metadata_mismatch">Metadata Mismatches Only</option>
               <option value="retracted">Retracted Citations Only</option>
@@ -143,13 +145,14 @@ export default function ReferenceTable({ references, onSelectReference, activeFi
               <th style={{ width: "120px" }}>Meta Score</th>
               <th style={{ width: "130px" }}>Context Relevance</th>
               <th style={{ width: "110px" }}>Overall Score</th>
+              <th style={{ width: "120px", textAlign: "center" }}>User Verify</th>
               <th style={{ width: "80px", textAlign: "right" }}>Inspect</th>
             </tr>
           </thead>
           <tbody>
             {sortedReferences.length === 0 ? (
               <tr>
-                <td colSpan={7} style={{ textAlign: "center", padding: "2.5rem 1rem", color: "var(--text-muted)" }}>
+                <td colSpan={8} style={{ textAlign: "center", padding: "2.5rem 1rem", color: "var(--text-muted)" }}>
                   No references match the active filter or search criteria.
                 </td>
               </tr>
@@ -207,12 +210,25 @@ export default function ReferenceTable({ references, onSelectReference, activeFi
                       )}
                     </td>
                     <td>
-                      <span className={`status-badge ${statusClass}`}>
-                        {statusText}
-                      </span>
-                      <div style={{ fontSize: "0.6875rem", color: "var(--text-muted)", marginTop: "0.25rem" }}>
-                        Source: {ref.verification.source}
-                      </div>
+                      {ref.verification.is_user_verified || ref.verification.status === "user_verified" ? (
+                        <div>
+                          <span className="status-badge user_verified">
+                            ✓ User Verified
+                          </span>
+                          <div style={{ fontSize: "0.6875rem", color: "#047857", marginTop: "0.25rem", fontWeight: 500 }}>
+                            {ref.verification.user_verification_note ? `Note: ${ref.verification.user_verification_note}` : "Manually confirmed"}
+                          </div>
+                        </div>
+                      ) : (
+                        <div>
+                          <span className={`status-badge ${statusClass}`}>
+                            {statusText}
+                          </span>
+                          <div style={{ fontSize: "0.6875rem", color: "var(--text-muted)", marginTop: "0.25rem" }}>
+                            Source: {ref.verification.source}
+                          </div>
+                        </div>
+                      )}
                     </td>
                     <td>
                       <span style={{ fontWeight: 600, color: "var(--text-primary)" }}>
@@ -249,6 +265,31 @@ export default function ReferenceTable({ references, onSelectReference, activeFi
                         <span style={{ fontSize: "0.75rem", color: "var(--text-muted)", fontStyle: "italic" }}>
                           Unavailable
                         </span>
+                      )}
+                    </td>
+                    <td style={{ textAlign: "center" }} onClick={(e) => e.stopPropagation()}>
+                      {ref.verification.is_user_verified || ref.verification.status === "user_verified" ? (
+                        <button
+                          type="button"
+                          className="btn-secondary btn-sm"
+                          style={{ color: "#047857", backgroundColor: "#ECFDF5", borderColor: "#A7F3D0", display: "inline-flex", alignItems: "center", gap: "0.25rem", fontSize: "0.75rem", fontWeight: 600 }}
+                          onClick={() => onToggleVerify && onToggleVerify(ref, false)}
+                          title="Verified by user. Click to undo."
+                        >
+                          <Check size={12} />
+                          <span>Verified</span>
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          className="btn-secondary btn-sm"
+                          style={{ display: "inline-flex", alignItems: "center", gap: "0.25rem", fontSize: "0.75rem" }}
+                          onClick={() => onToggleVerify && onToggleVerify(ref, true)}
+                          title="Mark reference as verified"
+                        >
+                          <CheckCircle2 size={12} />
+                          <span>Verify</span>
+                        </button>
                       )}
                     </td>
                     <td style={{ textAlign: "right" }}>

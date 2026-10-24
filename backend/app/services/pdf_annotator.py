@@ -36,7 +36,7 @@ def generate_annotated_pdf(paper_id: str, result: AnalysisResult) -> Path:
         first_page = doc[0]
         summary = result.summary
         total_refs = summary.references_detected
-        ver_count = summary.verified_exact + summary.verified_probable
+        ver_count = summary.verified_exact + summary.verified_probable + getattr(summary, "user_verified", 0)
         unver_count = summary.unverified
         overclaim_count = summary.overclaim_flags
         avg_score = (
@@ -188,6 +188,9 @@ def generate_annotated_pdf(paper_id: str, result: AnalysisResult) -> Path:
         elif status == "verified_probable":
             ref_color = COLOR_GREEN
             status_text = "VERIFIED PROBABLE MATCH"
+        elif status == "user_verified" or getattr(r.verification, "is_user_verified", False):
+            ref_color = COLOR_GREEN
+            status_text = "USER VERIFIED (CONFIRMED)"
         elif status == "metadata_mismatch":
             ref_color = COLOR_YELLOW
             status_text = "METADATA MISMATCH DETECTED"

@@ -15,7 +15,13 @@ class Settings(BaseSettings):
     CROSSREF_MAILTO: str = "academic-verify@example.org"
     SEMANTIC_SCHOLAR_BASE_URL: str = "https://api.semanticscholar.org/graph/v1"
     SEMANTIC_SCHOLAR_API_KEY: str | None = None
-    API_TIMEOUT_SECONDS: float = 12.0
+    CORE_API_KEY: str | None = None
+    NASA_ADS_API_KEY: str | None = None
+    IEEE_API_KEY: str | None = None
+    SCOPUS_API_KEY: str | None = None
+    WOS_API_KEY: str | None = None
+    DIMENSIONS_API_KEY: str | None = None
+    API_TIMEOUT_SECONDS: float = 6.0
 
     # Cache
     CACHE_TTL_DAYS: int = 30

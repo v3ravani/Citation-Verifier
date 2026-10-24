@@ -1,8 +1,9 @@
 import React, { useState } from "react";
-import { X, ExternalLink, Check, AlertTriangle, XCircle, HelpCircle, Target, Award, ShieldAlert, Copy } from "lucide-react";
+import { X, ExternalLink, Check, AlertTriangle, Target, ShieldAlert, Copy, CheckCircle2, UserCheck } from "lucide-react";
 
-export default function ReferenceDetailsModal({ reference, onClose }) {
+export default function ReferenceDetailsModal({ reference, onClose, onToggleVerify }) {
   const [copiedFmt, setCopiedFmt] = useState(null);
+  const [userNote, setUserNote] = useState("");
 
   if (!reference) return null;
 
@@ -11,6 +12,7 @@ export default function ReferenceDetailsModal({ reference, onClose }) {
   const parsed = reference.parsed || {};
   const breakdown = reference.score_breakdown || {};
   const contexts = reference.citation_occurrences || [];
+  const isUserVerified = verif.is_user_verified || verif.status === "user_verified";
 
   const handleCopyCitation = (text, type) => {
     navigator.clipboard.writeText(text);
@@ -49,8 +51,8 @@ export default function ReferenceDetailsModal({ reference, onClose }) {
             <h3 style={{ fontSize: "1.125rem", fontWeight: 600, color: "var(--text-primary)", margin: 0 }}>
               Reference Audit & Verification Details
             </h3>
-            <span className={`status-badge ${verif.status}`}>
-              {verif.status ? verif.status.replace("_", " ") : "unverified"}
+            <span className={`status-badge ${isUserVerified ? "user_verified" : (verif.status || "unverified")}`}>
+              {isUserVerified ? "✓ user verified" : (verif.status ? verif.status.replace("_", " ") : "unverified")}
             </span>
           </div>
           <button
@@ -61,6 +63,71 @@ export default function ReferenceDetailsModal({ reference, onClose }) {
             <X size={16} />
           </button>
         </div>
+
+        {/* User Manual Verification Override Card */}
+        {isUserVerified ? (
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "0.75rem", padding: "0.875rem 1rem", backgroundColor: "#ECFDF5", border: "1px solid #A7F3D0", borderRadius: "6px", marginBottom: "1rem", color: "#065F46" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
+              <CheckCircle2 size={20} style={{ color: "#047857", flexShrink: 0 }} />
+              <div>
+                <strong style={{ fontSize: "0.875rem" }}>Manually Verified by User</strong>
+                {verif.user_verification_note && (
+                  <div style={{ fontSize: "0.78125rem", marginTop: "2px", color: "#047857" }}>
+                    Note: <em>"{verif.user_verification_note}"</em>
+                  </div>
+                )}
+                {verif.user_verified_at && (
+                  <div style={{ fontSize: "0.6875rem", color: "#059669", marginTop: "2px" }}>
+                    Recorded: {new Date(verif.user_verified_at).toLocaleString()}
+                  </div>
+                )}
+              </div>
+            </div>
+            <button
+              type="button"
+              className="btn-secondary btn-sm"
+              style={{ borderColor: "#A7F3D0", color: "#991B1B", backgroundColor: "#FFFFFF" }}
+              onClick={() => onToggleVerify && onToggleVerify(reference, false)}
+            >
+              Undo Verification
+            </button>
+          </div>
+        ) : (
+          <div style={{ padding: "0.75rem 1rem", backgroundColor: "var(--bg-secondary)", border: "1px solid var(--border-subtle)", borderRadius: "6px", marginBottom: "1rem" }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "0.5rem", flexWrap: "wrap", gap: "0.5rem" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", fontSize: "0.8125rem", fontWeight: 600, color: "var(--text-primary)" }}>
+                <UserCheck size={16} style={{ color: "var(--accent-primary)" }} />
+                <span>Mark as Verified by User</span>
+              </div>
+              <span style={{ fontSize: "0.7rem", color: "var(--text-muted)" }}>
+                Confirm authenticity if validated in library, archive, or print volume
+              </span>
+            </div>
+            <div style={{ display: "flex", gap: "0.5rem" }}>
+              <input
+                type="text"
+                placeholder="Optional verification note (e.g., Verified from institutional library or print book)..."
+                value={userNote}
+                onChange={(e) => setUserNote(e.target.value)}
+                style={{ flex: 1, padding: "0.4rem 0.6rem", fontSize: "0.8125rem", border: "1px solid var(--border-subtle)", borderRadius: "4px", backgroundColor: "var(--bg-primary)", color: "var(--text-primary)" }}
+              />
+              <button
+                type="button"
+                className="btn-primary btn-sm"
+                style={{ display: "inline-flex", alignItems: "center", gap: "0.3rem", whiteSpace: "nowrap" }}
+                onClick={() => {
+                  if (onToggleVerify) {
+                    onToggleVerify(reference, true, userNote);
+                  }
+                  setUserNote("");
+                }}
+              >
+                <Check size={13} />
+                <span>Mark Verified</span>
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Retraction Alert Banner if flagged */}
         {reference.is_retracted && (
